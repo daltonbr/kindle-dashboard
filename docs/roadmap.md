@@ -40,12 +40,99 @@ Open items deferred to post-M2 (don't block progress):
 
 ## M3 — Weather panel (Open-Meteo)
 
-- [ ] Open-Meteo client in `server/internal/weather/`
-- [ ] In-memory TTL cache (don't refetch more than every ~10 min)
-- [ ] Weather panel renderer with current temp, conditions icon (or text), short forecast
-- [ ] Configurable `WEATHER_LAT` / `WEATHER_LON` via env
+**Definition of done:** weather information shows on the Kindle and updates within `WEATHER_TTL` of a real-world change. Deployed via GHCR.
 
-**Definition of done:** weather information shows on the Kindle and updates within `WEATHER_TTL` of a real-world change.
+Each sub-task below is small enough to land as its own PR; the order matters because later steps depend on earlier ones.
+
+### M3.1 — Open-Meteo client (no UI yet)
+
+- [ ] `server/internal/weather/openmeteo.go` — small typed client. One method: `Fetch(ctx, lat, lon) (Forecast, error)`. Uses `net/http` and `encoding/json`; no third-party deps.
+- [ ] Types pinned to what we actually render: current temp, current conditions code, today's high/low, next 24h hourly temperatures.
+- [ ] Unit test against a `httptest.Server` returning a canned Open-Meteo response payload (commit a fixture under `internal/weather/testdata/`).
+
+### M3.2 — TTL cache around the client
+
+- [ ] `server/internal/weather/cache.go` — thread-safe wrapper. `Get(ctx) (Forecast, error)` returns the cached value if fresh, refetches if stale. Single-flight on refetch (no thundering herd; only matters if we ever cache-miss concurrently, but the pattern is small).
+- [ ] Env-driven TTL: `WEATHER_TTL` (default `10m`).
+- [ ] Test: assert a second `Get` within TTL doesn't hit upstream.
+
+### M3.3 — Add CA certs to the Docker image
+
+- [ ] Update `server/Dockerfile`: `COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt` so the `FROM scratch` runtime can do HTTPS. Document this in [D9](decisions.md) (small append, not a new decision).
+- [ ] Verify with a local `docker run`: fetch from `https://api.open-meteo.com/v1/forecast?…` from inside the container, no x509 errors.
+
+### M3.4 — Real fonts (embed a TTF)
+
+- [ ] Pick an open-license TTF (candidates: Inter, IBM Plex Sans, Atkinson Hyperlegible). Commit it under `server/internal/render/fonts/`.
+- [ ] Add `golang.org/x/image/font/opentype` to `go.mod` and document in [decisions.md](decisions.md) (new D entry).
+- [ ] Embed with `//go:embed`. Provide a `Face(size float64) font.Face` helper in `internal/render/fonts/`.
+- [ ] Migrate existing M2 text to the new font; delete the basicfont references.
+
+### M3.5 — Compose the weather panel
+
+- [ ] Refactor `render.Dashboard` to delegate to `panels.Weather(ctx, w *image.Gray, area image.Rectangle, forecast Forecast)`. The "panel" abstraction is what lets M4+ stack more cards.
+- [ ] Layout: large current temp + condition word, smaller "today H/L", a 24h temperature curve at the bottom (skip if it's getting complicated; a row of hourly numbers is fine).
+- [ ] Pass `Forecast` into `Dashboard` instead of fetching inside it — keeps rendering pure.
+
+### M3.6 — Wire it all up in `main.go`
+
+- [ ] Read `WEATHER_LAT`, `WEATHER_LON`, `WEATHER_TTL` from env.
+- [ ] Construct the cached client at boot. Inject into the handler.
+- [ ] On `GET /dashboard.png`, ask the cached client for a forecast (may block on first request; that's fine — the cron caller's timeout is 20s).
+- [ ] Handler should still render a usable dashboard if `cache.Get` errors (e.g. "weather unavailable" message, last-good cached forecast if any).
+
+### M3.7 — Deploy + verify on device
+
+- [ ] Push to main → GHCR publishes new `:latest`.
+- [ ] Operator pulls and restarts the container with the new env vars.
+- [ ] Confirm `/dashboard.png` from the server shows real weather.
+- [ ] Confirm the same on the Kindle panel.
+
+---
+
+## M4 — Polish + reliability
+
+Big-picture goals: dashboard stays visible 24/7 with sensible battery life, refreshes survive Wi-Fi blips, and the device is mounted somewhere sensible.
+
+### M4.1 — Sleep / always-on path
+
+- [ ] Investigate `linkss` "last screen" mode (already-installed jailbreak hack). Write the dashboard PNG to `/mnt/us/linkss/screensavers/bg_ss00.png` instead of (or in addition to) calling `eips -g`. Document findings in a new `docs/recon/<date>-linkss.md`.
+- [ ] Alternatively: `lipc-set-prop com.lab126.powerd preventScreenSaver 1` to keep the device awake on AC power. Less power-efficient but simpler.
+- [ ] Pick one path; record the decision in `docs/decisions.md`.
+
+### M4.2 — Production cron cadence
+
+- [ ] Change `/etc/crontab/root` entry from `* * * * *` to `*/15 * * * *` (same mntroot dance as the install).
+- [ ] Reflect the change in `docs/client.md`.
+
+### M4.3 — Healthcheck wiring
+
+- [ ] If the operator's compose includes a `HEALTHCHECK`, ensure `GET /healthz` works from inside the container with no shell (currently fine — Go binary itself is the only thing in the image; HEALTHCHECK needs to use the binary or be docker's `CMD-SHELL` with `wget`/`curl` *inside* — neither exists in `FROM scratch`). Options: add a `/healthz` hint command in the binary itself (`./server healthcheck`), or accept that the host-side healthcheck is the only viable place.
+- [ ] Document the choice.
+
+### M4.4 — Cron survival across reboots
+
+- [ ] Reboot the Kindle (long-press power → restart). Verify the cron entry is still in `/etc/crontab/root` after boot and that crond fires it.
+
+### M4.5 — Battery / mount
+
+- [ ] Drive-test the BatteryStatus extension; add a battery line to the dashboard PNG.
+- [ ] Decide on wall-mount hardware + power delivery (USB cable run, dock, magsafe-style?).
+- [ ] Long-soak test (24h) and capture battery drain.
+
+---
+
+## Post-M4 ideas (not committed)
+
+Pull from this list when M4 is done — don't start in parallel.
+
+- Calendar panel (CalDAV / Google Calendar via a local sync helper)
+- Kanban / chore tracker panel
+- "Now playing" panel
+- Multiple dashboard layouts selected via query param (`?layout=morning`, etc.)
+- Configuration API the Kindle polls for refresh hints
+- Support for additional eink devices at other resolutions
+- Migrate `client/refresh.sh` install to a small `client/install.sh` once we have >1 client artifact
 
 ## M4 — Polish + reliability
 
@@ -55,13 +142,3 @@ Open items deferred to post-M2 (don't block progress):
 - [ ] Kindle screensaver / reader UI handled cleanly
 - [ ] Battery & charging plan for living-room mount
 
-## Post-MVP ideas (not committed)
-
-- Calendar panel (CalDAV / Google Calendar via a local sync helper)
-- Kanban / chore tracker panel
-- "Now playing" panel
-- Multiple dashboard layouts selected via query param (`?layout=morning`, etc.)
-- Configuration API the Kindle polls for refresh hints
-- Support for additional eink devices at other resolutions
-
-Pull from this list when M4 is done — don't start in parallel.

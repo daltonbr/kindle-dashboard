@@ -21,6 +21,7 @@ Early scaffolding. See [`docs/roadmap.md`](docs/roadmap.md) for milestones. v1 t
 
 ## Quick links
 
+- [AGENTS.md](AGENTS.md) — onboarding for new contributors or AI agents
 - [Device specs & access](docs/device.md)
 - [Architecture overview](docs/architecture.md)
 - [Stack decisions](docs/decisions.md)
