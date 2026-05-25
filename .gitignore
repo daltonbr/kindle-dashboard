@@ -1,0 +1,23 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Go
+/server/bin/
+/server/server
+*.test
+*.out
+
+# Local env / secrets
+.env
+.env.local
+*.local
+
+# Build artifacts
+dist/
+build/
