@@ -54,6 +54,18 @@ The legacy `ssh-rsa` algorithms are required because the Kindle's SSH server is 
 > - Key formats and authorized-keys path may live under `/etc/dropbear/` rather than `/root/.ssh/`.
 > - SFTP/scp can be limited depending on how dropbear was built — if `scp` misbehaves, fall back to `cat file | ssh kindle 'cat > /mnt/us/...'`.
 
+## Filesystem mount mode
+
+Rootfs is mounted **read-only by default** for safety (Kindle firmware behavior). To install scripts, edit init files, or write outside `/mnt/us/`, switch with:
+
+```sh
+mntroot rw    # remount root read-write
+# ...do the install...
+mntroot ro    # switch back; do this immediately when done
+```
+
+The `/mnt/us/` partition (user storage) stays writable in both modes, so anything we drop there for the dashboard does not need `mntroot rw`. We only need write mode if we touch `/etc/`, `/usr/`, or other system paths.
+
 ## Jailbreak / on-device tools
 
 The jailbreak gives us a shell + ability to drop our own scripts under `/mnt/us/`. Tools we rely on:
@@ -68,16 +80,16 @@ The jailbreak gives us a shell + ability to drop our own scripts under `/mnt/us/
 
 ## Things to confirm on first SSH session
 
-These are values referenced in the blog post we're following but specific to a Paperwhite — we need to verify the equivalents on the 7th gen basic:
+These are values referenced in the blog post we're following but specific to a Paperwhite — we need to verify the equivalents on the 7th gen basic. Answered items link to the recon doc that confirmed them.
 
-- [ ] Does `eips` accept `-g` (display image) and `-c` (clear) flags the same way?
-- [ ] Path of writable storage (likely `/mnt/us/` — confirm)
-- [ ] Cron implementation available (busybox `crond`? Or do we install one?)
-- [ ] Confirm dropbear version + whether we want to swap to OpenSSH (currently untested)
-- [ ] How to disable the Kindle reader UI / lock screen so our image stays on the panel
-- [ ] Battery/power behavior — does the device sleep aggressively? How do we prevent it?
+- [x] Does `eips` accept `-g` (display image) and `-c` (clear) flags the same way? — **Yes.** Binary at `/usr/sbin/eips` (not on the default non-interactive `$PATH`). See [recon 2026-05-25](recon/2026-05-25-first-ssh.md).
+- [x] Path of writable storage — **`/mnt/us/`** (~2.5 GB free, `fuse.fsp` mount, writable regardless of rootfs mode).
+- [x] Cron implementation available — **busybox `crond` (already running)**, root crontab at `/etc/crontab/root`.
+- [x] Confirm dropbear version + whether we want to swap to OpenSSH — **Dropbear v2020.81**. Works fine; no plan to swap.
+- [ ] How to disable the Kindle reader UI / lock screen so our image stays on the panel — still open; candidates noted in the recon doc.
+- [ ] Battery/power behavior — does the device sleep aggressively? How do we prevent it? — still open.
 
-Track answers as we discover them.
+Track answers as we discover them; record findings in `docs/recon/`.
 
 ## Reference
 
