@@ -148,3 +148,17 @@ If we ever need release semantics (semver tags), we can add a `v*` tag trigger t
 
 - Solo experimentation phase; the CI bar is for catching regressions, not gating self-merges.
 - Will revisit (require CI pass + 1 review) once the project leaves the rapid-iteration phase or gains a second contributor.
+
+---
+
+## D12 — Open-Meteo client: single attempt, no retries
+
+**Decision:** `weather.Client.Fetch` does one HTTP request with a 10s timeout. No retries, no exponential backoff, no jitter. Failures propagate to the caller.
+
+**Why:**
+
+- M3.2's TTL cache holds the last successful forecast, so transient upstream failures are already absorbed for the steady-state case.
+- The first fetch (cold cache) is the only place where a single-attempt failure becomes user-visible. The dashboard handler will render a "weather unavailable" message in that case (M3.6) — acceptable for a wall display that retries on the next cron tick anyway.
+- Keeps the client small and easy to reason about. Adding retries means picking a strategy (count, backoff, idempotency assumptions) and writing tests for it — disproportionate effort right now.
+
+**Revisit when:** we see real cold-start fetch failures often enough to be annoying, or we start depending on a less-reliable upstream than Open-Meteo.
