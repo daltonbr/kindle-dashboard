@@ -62,6 +62,10 @@ The jailbreak gives us a shell + ability to drop our own scripts under `/mnt/us/
 - `curl` — should be available; if not, busybox `wget` works.
 - `cron` / busybox cron — exact mechanism TBD on first SSH session; see [client.md](client.md).
 
+### Installed jailbreak hacks
+
+- **ScreenSavers hack** — installed but behavior on this device not yet fully characterized. Known to swap the default screensaver for a custom image; may also affect how the panel behaves when the device "sleeps". Relevant because our dashboard probably wants to *be* the screensaver (i.e. the image shown when the reader UI is idle), so the interaction between this hack and our `eips` writes is something to verify in recon.
+
 ## Things to confirm on first SSH session
 
 These are values referenced in the blog post we're following but specific to a Paperwhite — we need to verify the equivalents on the 7th gen basic:

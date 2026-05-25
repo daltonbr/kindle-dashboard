@@ -1,0 +1,15 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "eips",
+    "eink"
+  ],
+  "ignorePaths": [
+    ".git/**",
+    "node_modules/**",
+    "server/bin/**",
+    "dist/**",
+    "build/**"
+  ]
+}
