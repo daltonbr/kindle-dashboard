@@ -33,10 +33,10 @@ Open items deferred to post-M2 (don't block progress):
 - [x] Local end-to-end: Mac runs the binary on port 8765, kindle cron pulls and `eips`-renders the Go image (confirmed visually on the panel)
 - [x] CI: `.github/workflows/ci.yml` — go vet, golangci-lint, go test -race, go build, shellcheck on `client/*.sh`
 - [x] Release: `.github/workflows/release.yml` — builds and pushes `ghcr.io/daltonbr/kindle-dashboard:latest` + `:sha-<short>` on push to main
-- [ ] Deploy to the operator's Docker host — pending first successful GHCR publish
-- [ ] Update kindle's `config.env` to point at the VM (currently pointing at Mac IP for dev)
+- [x] Deploy to the operator's Docker host
+- [x] Update kindle's `config.env` to point at the deployed server
 
-**Definition of done met locally; deploy is the remaining step.**
+**Definition of done met. M2 closed.**
 
 ## M3 — Weather panel (Open-Meteo)
 
