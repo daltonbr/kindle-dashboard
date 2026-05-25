@@ -68,12 +68,12 @@ Each sub-task below is small enough to land as its own PR; the order matters bec
 - [x] On `GET /dashboard.png`, ask the cached client for a forecast (8s per-request timeout; cron-side curl timeout is 20s).
 - [x] Handler renders "(weather unavailable)" if `cache.Get` errors. Last-good fallback deferred.
 
-### M3.7 — Deploy + verify on device
+### M3.7 — Deploy + verify on device ✅
 
-- [ ] Push to main → GHCR publishes new `:latest`.
-- [ ] Operator pulls and restarts the container with the new env vars.
-- [ ] Confirm `/dashboard.png` from the server shows real weather.
-- [ ] Confirm the same on the Kindle panel.
+- [x] Push to main → GHCR publishes new `:latest`.
+- [x] Operator pulled and restarted the container (running with Brighton defaults; env-var plumbing is an operator TODO in `docs/server.md`).
+- [x] `/dashboard.png` from the deployed server shows real weather.
+- [x] Confirmed on the Kindle panel.
 
 ### M3.5 — Compose the weather panel (after first deploy)
 

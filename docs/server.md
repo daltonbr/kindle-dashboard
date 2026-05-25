@@ -44,8 +44,11 @@ M3 will add `internal/weather/` (Open-Meteo client + TTL cache) and embedded TTF
 | --- | --- | --- |
 | `PORT` | `8080` | Listening port inside the container. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. Standard `slog.Level` text. |
+| `WEATHER_LAT` | `50.8225` | Latitude for the Open-Meteo lookup. Default is Brighton, UK. |
+| `WEATHER_LON` | `-0.1372` | Longitude for the Open-Meteo lookup. |
+| `WEATHER_TTL` | `10m` | Any `time.Duration`. The upstream cache TTL; `0` disables caching. |
 
-M3 will add `WEATHER_LAT`, `WEATHER_LON`, `WEATHER_TTL`.
+> **Operator TODO:** expose `WEATHER_LAT` / `WEATHER_LON` / `WEATHER_TTL` as variables in the deployment config so they can be tuned without rebuilding the image. Currently relying on the image's built-in Brighton defaults.
 
 ## Endpoints
 
