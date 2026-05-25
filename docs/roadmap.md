@@ -50,11 +50,11 @@ Each sub-task below is small enough to land as its own PR; the order matters bec
 - [x] Types pinned to what we actually render: current temp, current conditions code, today's high/low, next 24h hourly temperatures.
 - [x] Unit test against a `httptest.Server` returning a canned Open-Meteo response payload (committed `testdata/brighton.json`).
 
-### M3.2 — TTL cache around the client
+### M3.2 — TTL cache around the client ✅
 
-- [ ] `server/internal/weather/cache.go` — thread-safe wrapper. `Get(ctx) (Forecast, error)` returns the cached value if fresh, refetches if stale. Single-flight on refetch (no thundering herd; only matters if we ever cache-miss concurrently, but the pattern is small).
-- [ ] Env-driven TTL: `WEATHER_TTL` (default `10m`).
-- [ ] Test: assert a second `Get` within TTL doesn't hit upstream.
+- [x] `server/internal/weather/cache.go` — thread-safe wrapper. `Get(ctx) (Forecast, error)` returns the cached value if fresh, refetches if stale. Single-flight on refetch (channel-broadcast pattern; 50-goroutine cold-start test asserts exactly one upstream call).
+- [ ] Env-driven TTL: `WEATHER_TTL` (default `10m`). *(env wiring happens in M3.6; the Cache constructor takes a `ttl time.Duration`.)*
+- [x] Test: assert a second `Get` within TTL doesn't hit upstream. Also: TTL expiry refetches, errors aren't cached, single-flight coalesces concurrent cold-starts, ctx cancellation while waiting on inflight, `ttl=0` disables caching.
 
 ### M3.3 — Add CA certs to the Docker image
 
