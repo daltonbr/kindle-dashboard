@@ -1,8 +1,7 @@
 // Package render composes the dashboard image.
 //
-// v1 (M2) returns a static layout with a server-side timestamp so the
-// Kindle visibly redraws on each cron tick. Real panels (weather, etc.)
-// land in M3+.
+// M3 step 1: weather data is wired in but layout/typography are still the
+// M2 placeholder. M3.5 will refactor into proper panels; M3.4 swaps fonts.
 package render
 
 import (
@@ -15,10 +14,13 @@ import (
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
+
+	"github.com/daltonbr/kindle-dashboard/server/internal/weather"
 )
 
 // Dashboard renders a w×h 8-bit grayscale image for the eink panel.
-func Dashboard(w, h int, now time.Time) *image.Gray {
+// Pass forecast=nil to render the "weather unavailable" state.
+func Dashboard(w, h int, now time.Time, forecast *weather.Forecast) *image.Gray {
 	img := image.NewGray(image.Rect(0, 0, w, h))
 
 	fill(img, img.Bounds(), 255)
@@ -27,18 +29,22 @@ func Dashboard(w, h int, now time.Time) *image.Gray {
 	strokeRect(img, image.Rect(0, 0, w, h), 0)
 	strokeRect(img, image.Rect(10, 10, w-10, h-10), 0)
 
-	// Header + timestamp. basicfont.Face7x13 is small but legible at 167 PPI;
-	// nicer typography lands when we adopt an embedded TTF for M3.
 	drawText(img, "Kindle Dashboard", 40, 50, 0)
-	drawText(img, "M2 - Go server placeholder", 40, 75, 0)
-	drawText(img, fmt.Sprintf("Served at %s", now.Format("2006-01-02 15:04:05 MST")), 40, 120, 0)
+	drawText(img, fmt.Sprintf("Served at %s", now.Format("2006-01-02 15:04:05 MST")), 40, 80, 0)
 
-	drawText(img, "If you can read this on the Kindle,", 40, 180, 0)
-	drawText(img, "the Go pipeline is working.", 40, 200, 0)
+	drawText(img, "Weather", 40, 140, 0)
+	if forecast != nil {
+		drawText(img, fmt.Sprintf("Now: %.1f C  (code %d)", forecast.Now.TempC, forecast.Now.WeatherCode), 40, 170, 0)
+		drawText(img, fmt.Sprintf("Today: H %.1f / L %.1f", forecast.HighToday, forecast.LowToday), 40, 195, 0)
+		drawText(img, fmt.Sprintf("Observed at %s", forecast.Now.Time.Format("15:04 MST")), 40, 220, 0)
+		drawText(img, fmt.Sprintf("Fetched at %s", forecast.FetchedAt.Format("15:04:05 UTC")), 40, 245, 0)
+	} else {
+		drawText(img, "(weather unavailable)", 40, 170, 0)
+	}
 
 	// 16-level grayscale ramp. Validates the panel actually renders grays.
 	rampY := 450
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		x := 40 + i*32
 		fill(img, image.Rect(x, rampY, x+30, rampY+80), uint8(i*17))
 		strokeRect(img, image.Rect(x, rampY, x+30, rampY+80), 0)

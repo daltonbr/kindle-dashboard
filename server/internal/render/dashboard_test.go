@@ -15,7 +15,7 @@ func TestDashboard_dimensionsAndEncoding(t *testing.T) {
 	)
 	now := time.Date(2026, 1, 2, 15, 4, 5, 0, time.UTC)
 
-	img := Dashboard(w, h, now)
+	img := Dashboard(w, h, now, nil)
 
 	want := image.Rect(0, 0, w, h)
 	if got := img.Bounds(); got != want {

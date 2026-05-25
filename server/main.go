@@ -8,15 +8,22 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/daltonbr/kindle-dashboard/server/internal/render"
+	"github.com/daltonbr/kindle-dashboard/server/internal/weather"
 )
 
 const (
 	panelWidth  = 600
 	panelHeight = 800
+
+	// Per-request budget for fetching weather. Cron-side curl times out at 20s,
+	// PNG encode is ~10ms — 8s gives Open-Meteo + cache plenty of headroom and
+	// still leaves time for the encode + transfer.
+	weatherFetchTimeout = 8 * time.Second
 )
 
 func main() {
@@ -24,15 +31,21 @@ func main() {
 	logger := newLogger(envOrDefault("LOG_LEVEL", "info"))
 	slog.SetDefault(logger)
 
+	cache, err := buildWeatherCache()
+	if err != nil {
+		slog.Error("weather config", "err", err)
+		os.Exit(1)
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /dashboard.png", handleDashboard)
+	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(cache))
 	mux.HandleFunc("GET /healthz", handleHealth)
 
 	srv := &http.Server{
 		Addr:         ":" + port,
 		Handler:      logRequests(mux),
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  30 * time.Second,
 	}
 
@@ -54,12 +67,42 @@ func main() {
 	_ = srv.Shutdown(shutdownCtx)
 }
 
-func handleDashboard(w http.ResponseWriter, _ *http.Request) {
-	img := render.Dashboard(panelWidth, panelHeight, time.Now())
-	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "no-store")
-	if err := png.Encode(w, img); err != nil {
-		slog.Error("png encode", "err", err)
+func buildWeatherCache() (*weather.Cache, error) {
+	lat, err := strconv.ParseFloat(envOrDefault("WEATHER_LAT", "50.8225"), 64)
+	if err != nil {
+		return nil, errors.New("WEATHER_LAT: " + err.Error())
+	}
+	lon, err := strconv.ParseFloat(envOrDefault("WEATHER_LON", "-0.1372"), 64)
+	if err != nil {
+		return nil, errors.New("WEATHER_LON: " + err.Error())
+	}
+	ttl, err := time.ParseDuration(envOrDefault("WEATHER_TTL", "10m"))
+	if err != nil {
+		return nil, errors.New("WEATHER_TTL: " + err.Error())
+	}
+	slog.Info("weather configured", "lat", lat, "lon", lon, "ttl", ttl)
+	return weather.NewCache(weather.NewClient("", nil), lat, lon, ttl), nil
+}
+
+func makeDashboardHandler(cache *weather.Cache) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fetchCtx, cancel := context.WithTimeout(r.Context(), weatherFetchTimeout)
+		defer cancel()
+
+		var forecast *weather.Forecast
+		fc, err := cache.Get(fetchCtx)
+		if err != nil {
+			slog.Warn("weather fetch failed", "err", err)
+		} else {
+			forecast = &fc
+		}
+
+		img := render.Dashboard(panelWidth, panelHeight, time.Now(), forecast)
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "no-store")
+		if err := png.Encode(w, img); err != nil {
+			slog.Error("png encode", "err", err)
+		}
 	}
 }
 

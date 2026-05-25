@@ -61,25 +61,12 @@ Each sub-task below is small enough to land as its own PR; the order matters bec
 - [x] Builder installs `ca-certificates`; final scratch image gets `COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt`. Documented in D9 (already mentioned the eventual COPY; no new D needed).
 - [x] Verified locally: built the image, ran a static Go probe inside it against `https://api.open-meteo.com/v1/forecast` → `200 OK` + real JSON. No x509 errors.
 
-### M3.4 — Real fonts (embed a TTF)
+### M3.6 — Wire it all up in `main.go` ✅ (done before M3.4/M3.5 — see note below)
 
-- [ ] Pick an open-license TTF (candidates: Inter, IBM Plex Sans, Atkinson Hyperlegible). Commit it under `server/internal/render/fonts/`.
-- [ ] Add `golang.org/x/image/font/opentype` to `go.mod` and document in [decisions.md](decisions.md) (new D entry).
-- [ ] Embed with `//go:embed`. Provide a `Face(size float64) font.Face` helper in `internal/render/fonts/`.
-- [ ] Migrate existing M2 text to the new font; delete the basicfont references.
-
-### M3.5 — Compose the weather panel
-
-- [ ] Refactor `render.Dashboard` to delegate to `panels.Weather(ctx, w *image.Gray, area image.Rectangle, forecast Forecast)`. The "panel" abstraction is what lets M4+ stack more cards.
-- [ ] Layout: large current temp + condition word, smaller "today H/L", a 24h temperature curve at the bottom (skip if it's getting complicated; a row of hourly numbers is fine).
-- [ ] Pass `Forecast` into `Dashboard` instead of fetching inside it — keeps rendering pure.
-
-### M3.6 — Wire it all up in `main.go`
-
-- [ ] Read `WEATHER_LAT`, `WEATHER_LON`, `WEATHER_TTL` from env.
-- [ ] Construct the cached client at boot. Inject into the handler.
-- [ ] On `GET /dashboard.png`, ask the cached client for a forecast (may block on first request; that's fine — the cron caller's timeout is 20s).
-- [ ] Handler should still render a usable dashboard if `cache.Get` errors (e.g. "weather unavailable" message, last-good cached forecast if any).
+- [x] Read `WEATHER_LAT`, `WEATHER_LON`, `WEATHER_TTL` from env (defaults: Brighton, 10m).
+- [x] Construct the cached client at boot. Inject into the handler.
+- [x] On `GET /dashboard.png`, ask the cached client for a forecast (8s per-request timeout; cron-side curl timeout is 20s).
+- [x] Handler renders "(weather unavailable)" if `cache.Get` errors. Last-good fallback deferred.
 
 ### M3.7 — Deploy + verify on device
 
@@ -87,6 +74,20 @@ Each sub-task below is small enough to land as its own PR; the order matters bec
 - [ ] Operator pulls and restarts the container with the new env vars.
 - [ ] Confirm `/dashboard.png` from the server shows real weather.
 - [ ] Confirm the same on the Kindle panel.
+
+### M3.5 — Compose the weather panel (after first deploy)
+
+Reordered: wired into `main.go` first with the M2-style basicfont layout so we can see weather on the wall sooner. M3.5 then refactors the layout, M3.4 swaps fonts.
+
+- [ ] Refactor `render.Dashboard` to delegate to `panels.Weather(ctx, w *image.Gray, area image.Rectangle, forecast Forecast)`. The "panel" abstraction is what lets M4+ stack more cards.
+- [ ] Layout: large current temp + condition word, smaller "today H/L", a 24h temperature curve at the bottom (skip if it's getting complicated; a row of hourly numbers is fine).
+
+### M3.4 — Real fonts (embed a TTF) (after M3.5)
+
+- [ ] Pick an open-license TTF (candidates: Inter, IBM Plex Sans, Atkinson Hyperlegible). Commit it under `server/internal/render/fonts/`.
+- [ ] Add `golang.org/x/image/font/opentype` to `go.mod` and document in [decisions.md](decisions.md) (new D entry).
+- [ ] Embed with `//go:embed`. Provide a `Face(size float64) font.Face` helper in `internal/render/fonts/`.
+- [ ] Migrate existing text to the new font; delete the basicfont references.
 
 ---
 
