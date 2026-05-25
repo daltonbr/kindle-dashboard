@@ -56,10 +56,10 @@ Each sub-task below is small enough to land as its own PR; the order matters bec
 - [ ] Env-driven TTL: `WEATHER_TTL` (default `10m`). *(env wiring happens in M3.6; the Cache constructor takes a `ttl time.Duration`.)*
 - [x] Test: assert a second `Get` within TTL doesn't hit upstream. Also: TTL expiry refetches, errors aren't cached, single-flight coalesces concurrent cold-starts, ctx cancellation while waiting on inflight, `ttl=0` disables caching.
 
-### M3.3 — Add CA certs to the Docker image
+### M3.3 — Add CA certs to the Docker image ✅
 
-- [ ] Update `server/Dockerfile`: `COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt` so the `FROM scratch` runtime can do HTTPS. Document this in [D9](decisions.md) (small append, not a new decision).
-- [ ] Verify with a local `docker run`: fetch from `https://api.open-meteo.com/v1/forecast?…` from inside the container, no x509 errors.
+- [x] Builder installs `ca-certificates`; final scratch image gets `COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt`. Documented in D9 (already mentioned the eventual COPY; no new D needed).
+- [x] Verified locally: built the image, ran a static Go probe inside it against `https://api.open-meteo.com/v1/forecast` → `200 OK` + real JSON. No x509 errors.
 
 ### M3.4 — Real fonts (embed a TTF)
 
