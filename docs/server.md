@@ -117,6 +117,71 @@ The image is intentionally vanilla so any container orchestrator can run it. The
 - Suggested restart policy: `unless-stopped` (it's a wall-mounted backend, restart on host reboot is desirable).
 - No secrets needed for M2. M3 will not need them either (Open-Meteo is keyless).
 
+### Deploy recipes
+
+Pick whichever fits the deploy tooling. Both assume the image has been pulled from GHCR (it's public, no login required).
+
+**Plain `docker run`** (smoke test or one-shot):
+
+```sh
+docker run -d \
+  --name kindle-dashboard \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --health-cmd 'wget -qO- http://127.0.0.1:8080/healthz || exit 1' \
+  --health-interval 30s \
+  --health-timeout 3s \
+  --health-retries 3 \
+  ghcr.io/daltonbr/kindle-dashboard:latest
+```
+
+Notes:
+- Change the **host** port (`-p HOST:8080`) if 8080 is taken. Container port stays 8080.
+- `--read-only` is safe — the server writes nothing to disk.
+- The `wget` healthcheck **will not work against the `FROM scratch` image** as written (no shell, no wget). Either drop `--health-*` and rely on host-side checks, or use a sidecar healthcheck container. Resolved properly in M4.3.
+
+**Compose** (typical):
+
+```yaml
+services:
+  kindle-dashboard:
+    image: ghcr.io/daltonbr/kindle-dashboard:latest
+    container_name: kindle-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"    # change host port if 8080 is taken
+    environment:
+      PORT: "8080"
+      LOG_LEVEL: "info"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # healthcheck: see note above — FROM scratch has no shell/wget.
+    # Add a host-side check or a sidecar; M4.3 will resolve in-binary.
+```
+
+To pin a specific build instead of `:latest`:
+
+```
+image: ghcr.io/daltonbr/kindle-dashboard:sha-<short>
+```
+
+Tags are visible at https://github.com/daltonbr/kindle-dashboard/pkgs/container/kindle-dashboard.
+
+### Post-deploy checklist
+
+From any LAN machine:
+
+```sh
+curl -fsS http://<server-host>:<port>/healthz                 # → ok
+curl -fsS -o /tmp/dash.png http://<server-host>:<port>/dashboard.png
+file /tmp/dash.png                                            # → PNG image data, 600 x 800, 8-bit grayscale
+```
+
 Once the server is live, update the Kindle's `config.env` to point at it:
 
 ```sh
