@@ -1,0 +1,20 @@
+# Only the Go module needs to be in the build context. Everything else
+# (docs, client, repo metadata, build artifacts) just slows down the
+# Docker build and bloats the cache key.
+
+# Repo metadata
+.git
+.github
+.gitignore
+
+# Local build artifacts
+bin/
+server
+*.test
+*.out
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store

@@ -28,6 +28,7 @@ export PATH
 
 # Server endpoint. Override by editing this line or sourcing a config file
 # alongside the script (kept separate so secrets/IPs stay out of git).
+# shellcheck source=/dev/null
 [ -r "$ROOT/config.env" ] && . "$ROOT/config.env"
 : "${SERVER_URL:=http://CHANGE-ME:PORT/dashboard.png}"
 

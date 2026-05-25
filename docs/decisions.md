@@ -74,12 +74,77 @@ If we outgrow it later we can swap providers behind a `WeatherProvider` interfac
 
 ---
 
-## D6 — Image format: 600×800 4-bit grayscale PNG
+## D6 — Image format: 600×800 8-bit grayscale PNG
 
-**Decision:** Render to exactly the panel resolution and depth.
+**Decision:** Render to exactly the panel resolution; emit 8-bit grayscale PNGs.
 
 **Why:**
 
-- Matches the 7th-gen panel native format. No resizing or dithering on the device.
-- 4-bit PNG is tiny over the wire.
-- `eips` accepts PNGs directly.
+- Recon confirmed the framebuffer is `bits_per_pixel=8 grayscale=1` (see [recon 2026-05-25](recon/2026-05-25-first-ssh.md)). The panel itself dithers to 16 visible shades, but the input format is 8-bit gray — no point pre-quantizing.
+- 8-bit gray PNGs are still tiny on the wire (M2 image is ~4.5 KB).
+- `eips -g <file>` accepts the format directly.
+
+Originally written as "4-bit"; updated after on-device verification.
+
+---
+
+## D7 — Render on every request (no PNG cache)
+
+**Decision:** The server re-renders the dashboard PNG on every `GET /dashboard.png`.
+
+**Why:**
+
+- Rendering takes ~8 ms on commodity hardware (measured locally). Cheaper than reasoning about cache invalidation.
+- Means the timestamp in the image is always *now*, which is the right semantic — the client just polled, the image reflects that moment.
+- Upstream data (M3 weather) gets its **own** TTL cache so we don't hammer the API. The render step is what's uncached.
+
+---
+
+## D8 — Server text rendering: `golang.org/x/image/font/basicfont`
+
+**Decision:** Use `basicfont.Face7x13` for M2's text. Migrate to embedded TTF (`golang.org/x/image/font/opentype`) in M3 when the weather panel needs nicer typography.
+
+**Why:**
+
+- Bitmap font; no TTF file to ship in M2.
+- Maintained by the Go team (low supply-chain risk, same as the rest of `golang.org/x/image`).
+- 7×13 pixels reads fine at the panel's 167 PPI for a placeholder; we'll want better for production.
+
+---
+
+## D9 — Container: `FROM scratch`, non-root, static binary
+
+**Decision:** Final container layer is `FROM scratch` with the static Go binary as the only file. Runs as UID/GID `65534` (`nobody`/`nogroup`).
+
+**Why:**
+
+- Minimal attack surface — no shell, no package manager, no libc to keep patched.
+- Image is ~8 MB on disk, ~2.5 MB content, near-zero CVE footprint.
+- Non-root because the server has no need for it (binds 8080, reads no protected files).
+- When M3 adds HTTPS calls to Open-Meteo we'll `COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/` rather than switching to distroless — keeps the supply chain to just the Go toolchain image.
+
+---
+
+## D10 — Image publishing: GHCR with `latest` + `sha-<short>` tags
+
+**Decision:** Publish `ghcr.io/daltonbr/kindle-dashboard:latest` (always the tip of `main`) and `ghcr.io/daltonbr/kindle-dashboard:sha-<short>` (one per commit) on every push to `main`. The container is intentionally vanilla; deployment specifics are the operator's call.
+
+**Why:**
+
+- `latest` lets the VM's compose follow the trunk with no per-release ceremony — appropriate for a single-developer hobby project.
+- `sha-<short>` gives us a pin if a deploy needs rolling back, without needing to cut versioned releases.
+- GitHub-provided `GITHUB_TOKEN` is enough to push to GHCR with `packages: write` — no PAT to manage.
+- Repo is public, so the GHCR package can also be public — no auth on the VM side either.
+
+If we ever need release semantics (semver tags), we can add a `v*` tag trigger to the same workflow.
+
+---
+
+## D11 — Branch protection: deferred
+
+**Decision:** Branch protection on `main` is *not* enabled. CI still runs on every PR and push; failures are visible but non-blocking.
+
+**Why:**
+
+- Solo experimentation phase; the CI bar is for catching regressions, not gating self-merges.
+- Will revisit (require CI pass + 1 review) once the project leaves the rapid-iteration phase or gains a second contributor.

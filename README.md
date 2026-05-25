@@ -1,6 +1,6 @@
 # kindle-dashboard
 
-A self-hosted family dashboard for an old jailbroken Kindle, mounted on the living-room wall. The server (Go, running in Docker on a Proxmox VM) renders dashboard images; the Kindle pulls them over local Wi-Fi and displays them with `eips`.
+A self-hosted family dashboard for an old jailbroken Kindle, mounted on the living-room wall. The server (Go, packaged as a Docker image) renders dashboard images; the Kindle pulls them over local Wi-Fi and displays them with `eips`.
 
 ```
 ┌──────────────────────┐         HTTP GET /dashboard.png         ┌────────────────────┐

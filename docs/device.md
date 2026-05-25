@@ -76,7 +76,9 @@ The jailbreak gives us a shell + ability to drop our own scripts under `/mnt/us/
 
 ### Installed jailbreak hacks
 
-- **ScreenSavers hack** — installed but behavior on this device not yet fully characterized. Known to swap the default screensaver for a custom image; may also affect how the panel behaves when the device "sleeps". Relevant because our dashboard probably wants to *be* the screensaver (i.e. the image shown when the reader UI is idle), so the interaction between this hack and our `eips` writes is something to verify in recon.
+- **ScreenSavers hack (`linkss`, v0.25.N by NiLuJe)** — installed and confirmed in [recon 2026-05-25](recon/2026-05-25-first-ssh.md). Modes: random cycle, shuffled cycle, **last screen**, cover. For our dashboard the **"last screen"** mode is the ideal candidate: whatever image we last wrote to the screensaver location stays on the panel during sleep. Architecture-level discussion of using this as the production refresh path lives in [architecture.md](architecture.md) ("Alt approach: linkss screensaver pipeline").
+- **BatteryStatus** (KUAL extension, under `/mnt/us/extensions/BatteryStatus/`). Provides a "Print Battery Status" entry in KUAL → Helpers+. Likely a small binary that dumps battery level / temp / cycles. Worth investigating when we tackle the battery/wake question (post-M2) — could be invoked from `refresh.sh` to add a "battery: X%" line to the dashboard, and is useful baseline monitoring for the wall-mount use case.
+- **MRInstaller, koreader, linkfonts, linkfonts-ovr, renameotabin, usbnet** — installed but not relevant to the dashboard pipeline.
 
 ## Things to confirm on first SSH session
 

@@ -22,17 +22,21 @@ Goal: a static PNG, served from any HTTP source, ends up on the Kindle panel via
 **Definition of done met:** image visibly drawn on the Kindle, refreshed once per minute by cron with `ok` log lines, served from the Mac at `10.0.0.184:8765`.
 
 Open items deferred to post-M2 (don't block progress):
-- Suppress reader UI / lock screen overlay during refresh (leading candidate: linkss screensaver pipeline, see [architecture.md](architecture.md)).
-- Battery / wake-from-sleep behavior under cron-driven refresh.
+- Suppress reader UI / lock screen overlay during refresh (leading candidate: linkss screensaver pipeline in "last screen" mode, see [architecture.md](architecture.md)).
+- Battery / wake-from-sleep behavior under cron-driven refresh. **Observed during M2:** after ~30 min idle the Kindle enters deep sleep — Wi-Fi drops, cron either doesn't fire or fires with no network, ssh unreachable until a button tap. So the dashboard currently only refreshes while the device is "awake". The BatteryStatus extension may help us inspect this; ultimately the linkss "last screen" path will sidestep it entirely.
 
 ## M2 — Minimal Go server returning a static dashboard
 
-- [ ] `server/main.go` with `GET /dashboard.png` returning a hardcoded "Hello, Kindle" 600×800 grayscale PNG
-- [ ] `go.mod`, Dockerfile (multi-stage, `FROM scratch`), and `docker-compose.yml`
-- [ ] Deploy to the Docker VM, decide the external port
-- [ ] Point the Kindle's `refresh.sh` at it
+- [x] `server/main.go` with `GET /dashboard.png` returning a generated 600×800 grayscale PNG (title, timestamp, grayscale ramp). `GET /healthz` for container healthchecks.
+- [x] `go.mod` + stdlib + `golang.org/x/image/font/basicfont` (Go-team-maintained, tiny built-in bitmap font; nicer TTF lands in M3)
+- [x] `Dockerfile` (multi-stage, `FROM scratch`, non-root `USER 65534`, static stripped binary, ~8MB image)
+- [x] Local end-to-end: Mac runs the binary on port 8765, kindle cron pulls and `eips`-renders the Go image (confirmed visually on the panel)
+- [x] CI: `.github/workflows/ci.yml` — go vet, golangci-lint, go test -race, go build, shellcheck on `client/*.sh`
+- [x] Release: `.github/workflows/release.yml` — builds and pushes `ghcr.io/daltonbr/kindle-dashboard:latest` + `:sha-<short>` on push to main
+- [ ] Deploy to the operator's Docker host — pending first successful GHCR publish
+- [ ] Update kindle's `config.env` to point at the VM (currently pointing at Mac IP for dev)
 
-**Definition of done:** the Kindle shows a server-rendered image, deployed via compose.
+**Definition of done met locally; deploy is the remaining step.**
 
 ## M3 — Weather panel (Open-Meteo)
 

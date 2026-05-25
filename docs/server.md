@@ -5,65 +5,125 @@ Go HTTP server. Renders dashboard images on demand.
 ## Responsibilities
 
 1. Expose `GET /dashboard.png` returning a 600×800 grayscale PNG.
-2. Fetch upstream data (v1: Open-Meteo weather), with a sane in-memory cache so we don't hammer the API.
-3. Compose the dashboard image: panels (v1 has one — weather), labels, fonts.
-4. Be trivially deployable to the Docker VM.
+2. Expose `GET /healthz` for container healthchecks.
+3. (M3+) Fetch upstream data (weather, etc.) with a sane in-memory cache.
+4. (M3+) Compose the dashboard image: panels, labels, fonts.
 
-## Non-responsibilities (for now)
+## Non-responsibilities
 
 - Auth, TLS, rate limiting. LAN-only.
 - Persistence. Everything is in-memory; restart loses cache, which is fine.
 - Pushing to the client. The Kindle pulls.
+- Caching the rendered PNG. We re-render each request (~8 ms); the cache is on **upstream data**, not output. See [D7](decisions.md).
 
-## Planned layout (not yet created)
+## Layout (current)
 
 ```
 server/
-  main.go                # wiring + http server
+  go.mod / go.sum
+  main.go                       # http + env config + graceful shutdown
   internal/
-    render/              # image composition (image, image/draw, image/png)
-      dashboard.go       # top-level "render the whole dashboard" function
-      panels/
-        weather.go       # weather panel renderer
-      fonts/             # embedded fonts (TTF) via //go:embed
-    weather/
-      openmeteo.go       # client + types
-      cache.go           # TTL cache for upstream responses
-  Dockerfile             # multi-stage; FROM scratch final
-  docker-compose.yml     # for the Docker VM deployment
-  go.mod
-  go.sum
+    render/
+      dashboard.go              # Dashboard(w, h, now) -> *image.Gray
+      dashboard_test.go         # smoke test: bounds + PNG encoding
+  Dockerfile                    # multi-stage, FROM scratch
+  .dockerignore
 ```
+
+M3 will add `internal/weather/` (Open-Meteo client + TTL cache) and embedded TTF assets under `internal/render/fonts/`.
 
 ## Dependency policy
 
-- **Stdlib first.** `net/http`, `encoding/json`, `image`, `image/draw`, `image/png`, `time`, `context`, `log/slog` should cover the MVP entirely.
-- **One acceptable extra: a font rasterizer.** Go's stdlib doesn't include one. Likely candidate: `golang.org/x/image/font` + `golang.org/x/image/font/opentype` — both `golang.org/x` modules, maintained by the Go team, low supply-chain risk.
-- **Nothing else without a discussion** and a corresponding entry in [decisions.md](decisions.md).
+- Stdlib first. `net/http`, `image`, `image/draw`, `image/png`, `time`, `context`, `log/slog`, `os/signal` cover M2 entirely.
+- One outside dep: `golang.org/x/image/font/basicfont` — Go-team-maintained bitmap font for placeholder text. See [D8](decisions.md).
+- Nothing else without a discussion + a corresponding entry in [decisions.md](decisions.md).
 
-## Config (env vars)
+## Configuration (env vars)
 
 | Var | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `8080` | Listening port inside the container. External mapping handled by compose. |
-| `WEATHER_LAT` | TBD | Latitude for Open-Meteo. |
-| `WEATHER_LON` | TBD | Longitude for Open-Meteo. |
-| `WEATHER_TTL` | `10m` | Min interval between Open-Meteo fetches. |
-| `LOG_LEVEL` | `info` | slog level. |
+| `PORT` | `8080` | Listening port inside the container. |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. Standard `slog.Level` text. |
 
-## Endpoints (planned)
+M3 will add `WEATHER_LAT`, `WEATHER_LON`, `WEATHER_TTL`.
+
+## Endpoints
 
 | Method | Path | Returns |
 | --- | --- | --- |
-| GET | `/dashboard.png` | Current dashboard, 600×800 PNG |
-| GET | `/healthz` | `200 OK` for container healthcheck |
-| GET | `/debug/weather` | JSON of last cached weather payload (dev only) |
+| GET | `/dashboard.png` | Current dashboard, 600×800 8-bit grayscale PNG. `Cache-Control: no-store`. |
+| GET | `/healthz` | `200 OK` body `ok\n`. |
 
-Post-MVP: a small config API the Kindle can poll for refresh hints.
+## Container image
+
+Published to **`ghcr.io/daltonbr/kindle-dashboard`** on every push to `main`. Tags:
+
+| Tag | Meaning |
+| --- | --- |
+| `latest` | tip of `main` |
+| `sha-<short>` | a specific commit, for pinning / rollback |
+
+Image is:
+
+- `FROM scratch` — no shell, no package manager
+- Static Go binary, stripped, `-trimpath`'d
+- Runs as `USER 65534:65534` (nobody/nogroup)
+- Exposes 8080 (overridable via `PORT`)
+- ~8 MB on disk, ~2.5 MB content
+
+See [D9](decisions.md) for rationale.
+
+## Local development
+
+```sh
+cd server
+
+# Dependency sync, vet, test, lint, build
+go mod tidy
+go vet ./...
+go test -race ./...
+go build .
+
+# Run
+PORT=8765 ./server
+
+# Smoke test
+curl -fsS -o /tmp/dashboard.png http://localhost:8765/dashboard.png
+curl -fsS http://localhost:8765/healthz
+```
+
+Same checks run in CI; see [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+
+To test the docker image locally:
+
+```sh
+docker build -t kindle-dashboard-server:dev ./server
+docker run --rm -p 8765:8080 kindle-dashboard-server:dev
+```
 
 ## Image rendering notes
 
-- Pre-allocate `image.NewGray()` (4-bit isn't a stdlib pixel format — we'll quantize at encode time to keep the file small, or use `image.Gray16` and let PNG encoding handle it; benchmark when we get there).
-- Use embedded TTF (e.g. an open license font) so the binary stays a single artifact.
-- Layout in pixels, not points — we're aiming at a known panel.
-- Keep the rendered surface in portrait (600 wide × 800 tall). Add rotation later only if we wall-mount it landscape.
+- The renderer returns `*image.Gray` directly (8-bit gray); `image/png` encodes it without conversion.
+- `basicfont.Face7x13` is small (~3 mm tall at 167 PPI). Readable but not pretty — placeholder for M3.
+- Pre-rendered the panel in **portrait** (600 wide × 800 tall). Adding rotation later only if we wall-mount it landscape.
+
+## Deployment contract
+
+The image is intentionally vanilla so any container orchestrator can run it. The operator wires up port mapping, restart policy, healthcheck, etc.
+
+- Single container, no sidecars, no volumes, no dependencies.
+- Listens on `${PORT:=8080}` inside the container.
+- Healthcheck: `GET /healthz`.
+- Suggested restart policy: `unless-stopped` (it's a wall-mounted backend, restart on host reboot is desirable).
+- No secrets needed for M2. M3 will not need them either (Open-Meteo is keyless).
+
+Once the server is live, update the Kindle's `config.env` to point at it:
+
+```sh
+ssh kindle 'cat > /mnt/us/dashboard/config.env <<EOF
+SERVER_URL=http://<server-host>:<port>/dashboard.png
+LOG_LINES=500
+EOF'
+```
+
+…and tear down any dev server.

@@ -4,7 +4,7 @@ A deliberately small system. Two halves talking over HTTP on the LAN.
 
 ```
 ┌────────────────────────────────────┐         ┌────────────────────────────────────┐
-│ Kindle (7th gen, jailbroken)       │         │ Docker VM (Proxmox)                │
+│ Kindle (7th gen, jailbroken)       │         │ Self-hosted Docker host (LAN)      │
 │                                    │         │                                    │
 │  cron ── refresh.sh ──┐            │  HTTP   │  Go server                         │
 │                       └─ curl ─────┼────────►│   GET /dashboard.png               │
