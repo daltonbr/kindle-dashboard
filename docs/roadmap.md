@@ -44,11 +44,11 @@ Open items deferred to post-M2 (don't block progress):
 
 Each sub-task below is small enough to land as its own PR; the order matters because later steps depend on earlier ones.
 
-### M3.1 — Open-Meteo client (no UI yet)
+### M3.1 — Open-Meteo client (no UI yet) ✅
 
-- [ ] `server/internal/weather/openmeteo.go` — small typed client. One method: `Fetch(ctx, lat, lon) (Forecast, error)`. Uses `net/http` and `encoding/json`; no third-party deps.
-- [ ] Types pinned to what we actually render: current temp, current conditions code, today's high/low, next 24h hourly temperatures.
-- [ ] Unit test against a `httptest.Server` returning a canned Open-Meteo response payload (commit a fixture under `internal/weather/testdata/`).
+- [x] `server/internal/weather/openmeteo.go` — small typed client. One method: `Fetch(ctx, lat, lon) (Forecast, error)`. Uses `net/http` and `encoding/json`; no third-party deps.
+- [x] Types pinned to what we actually render: current temp, current conditions code, today's high/low, next 24h hourly temperatures.
+- [x] Unit test against a `httptest.Server` returning a canned Open-Meteo response payload (committed `testdata/brighton.json`).
 
 ### M3.2 — TTL cache around the client
 
