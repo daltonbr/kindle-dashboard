@@ -95,31 +95,48 @@ Reordered: wired into `main.go` first with the M2-style basicfont layout so we c
 
 Big-picture goals: dashboard stays visible 24/7 with sensible battery life, refreshes survive Wi-Fi blips, and the device is mounted somewhere sensible.
 
-### M4.1 — Sleep / always-on path
+### M4.1 — Sleep + scheduled wake (recon ✅, daemon impl pending)
 
-- [ ] Investigate `linkss` "last screen" mode (already-installed jailbreak hack). Write the dashboard PNG to `/mnt/us/linkss/screensavers/bg_ss00.png` instead of (or in addition to) calling `eips -g`. Document findings in a new `docs/recon/<date>-linkss.md`.
-- [ ] Alternatively: `lipc-set-prop com.lab126.powerd preventScreenSaver 1` to keep the device awake on AC power. Less power-efficient but simpler.
-- [ ] Pick one path; record the decision in `docs/decisions.md`.
+**Architecture chosen and validated end-to-end on 2026-05-25.** See [D14](decisions.md) and the full investigation in [recon 2026-05-25-wake-investigation](recon/2026-05-25-wake-investigation.md). Implementation lands as a follow-up sub-task below.
 
-### M4.2 — Production cron cadence
+Recon outcomes:
 
-- [ ] Change `/etc/crontab/root` entry from `* * * * *` to `*/15 * * * *` (same mntroot dance as the install).
-- [ ] Reflect the change in `docs/client.md`.
+- [x] Investigated `linkss` screensaver pipeline. Works as a "stay visible while sleeping" mechanism but cron is suspended along with the kernel — refreshes only happen when someone taps the device. Insufficient on its own. See [recon 2026-05-25-linkss](recon/2026-05-25-linkss.md).
+- [x] Tested `preventScreenSaver`-driven always-on. Works empirically, but burns Wi-Fi+CPU baseline 24/7. Rejected: the days-on-battery payoff of an eink panel is the reason we picked this device.
+- [x] Validated sleep+wake architecture: `/sys/class/rtc/rtc1/wakealarm` + `echo mem > /sys/power/state` works cleanly. LIPC `rtcWakeup`/`wakeUp` are *declared* but unimplemented on this firmware. Three-cycle integrated test (suspend → wake → Wi-Fi nudge → curl) succeeded 3/3 with ~7s post-wake reassociation.
+- [x] Identified prerequisites: `stop framework` + `stop lab126_gui` (eliminates `cvm` JIT crashes that otherwise abort suspends), and a `wirelessEnable 0/1` LIPC nudge after each wake (without the framework, Wi-Fi doesn't reassociate on its own).
+- [x] Confirmed `scaling_governor=powersave` (396 MHz) sticks across resume.
 
-### M4.3 — Healthcheck wiring
+### M4.2 — Implement the sleep+wake daemon
+
+- [ ] New `client/loop.sh` running the prelude + loop documented in [D14](decisions.md) / [recon 2026-05-25-wake-investigation](recon/2026-05-25-wake-investigation.md).
+- [ ] PID file at `$ROOT/state/loop.pid` for the watchdog.
+- [ ] Replace per-minute `* * * * *` crontab entry with `@reboot /mnt/us/dashboard/loop.sh` (same `mntroot rw`/`ro` dance as the original install).
+- [ ] Watchdog: `*/5 * * * * /mnt/us/dashboard/watchdog.sh` — relaunches the daemon if its PID is stale.
+- [ ] Default `INTERVAL=300` (5 min) for the first soak. Configurable via `config.env`.
+- [ ] Fast-return guard: if a cycle's `echo mem` returns in `< INTERVAL/2`, sleep the remainder before next iter (defends against unexpected wakeup sources).
+- [ ] Soak: 30 min at 5-min interval, count successful fetches, sample `battLevel` per iter.
+
+### M4.3 — Interval policy: production cadence + time-of-day awareness
+
+- [ ] Bump default `INTERVAL` from soak value (5 min) to production target after the M4.2 soak proves stable. Likely 10–15 min.
+- [ ] Optional follow-on: schedule-aware interval (faster during morning hours, slower overnight). Defer until we have a use case that benefits from it.
+
+### M4.4 — Healthcheck wiring (server-side)
 
 - [ ] If the operator's compose includes a `HEALTHCHECK`, ensure `GET /healthz` works from inside the container with no shell (currently fine — Go binary itself is the only thing in the image; HEALTHCHECK needs to use the binary or be docker's `CMD-SHELL` with `wget`/`curl` *inside* — neither exists in `FROM scratch`). Options: add a `/healthz` hint command in the binary itself (`./server healthcheck`), or accept that the host-side healthcheck is the only viable place.
 - [ ] Document the choice.
 
-### M4.4 — Cron survival across reboots
+### M4.5 — Daemon survival across reboots
 
-- [ ] Reboot the Kindle (long-press power → restart). Verify the cron entry is still in `/etc/crontab/root` after boot and that crond fires it.
+- [ ] Reboot the Kindle (long-press power → restart). Verify the `@reboot` daemon entry in `/etc/crontab/root` survives, the daemon comes up, and a refresh fires within `INTERVAL` of boot.
+- [ ] Watchdog kicks the daemon if the PID is stale (already in M4.2).
 
-### M4.5 — Battery / mount
+### M4.6 — Battery / mount
 
-- [ ] Drive-test the BatteryStatus extension; add a battery line to the dashboard PNG.
+- [ ] Sample `lipc-get-prop com.lab126.powerd battLevel` once per loop iteration into a CSV; plot drain rate over 24h.
 - [ ] Decide on wall-mount hardware + power delivery (USB cable run, dock, magsafe-style?).
-- [ ] Long-soak test (24h) and capture battery drain.
+- [ ] Long-soak test (24h) and capture battery drain at the production interval.
 
 ---
 

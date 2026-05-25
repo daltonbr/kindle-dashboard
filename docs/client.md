@@ -27,6 +27,7 @@ Lives in this repo at [`../client/refresh.sh`](../client/refresh.sh). Pure `/bin
 - **Tempfile + atomic rename** before `eips -g`. No risk of drawing a half-written PNG.
 - **Magic-byte check** (`89 50 4E 47 0D 0A 1A 0A`). If the server returns an HTML error page, we skip the draw instead of nuking the panel.
 - **Self-trimming log** at `LOG_LINES` lines (default 500).
+- **Screensaver publish** (M4.1 safety net): after a successful draw, the same PNG is copied to `/mnt/us/linkss/screensavers/bg_ss00.png`. With the M4.x sleep+wake daemon (the real solution, see [D14](decisions.md)) the stock framework is stopped and the screensaver pipeline is never engaged — this copy only matters if the daemon is off and the stock UI is back. Set `SCREENSAVER_PNG=""` to disable.
 - All paths (`ROOT`) and the server URL are env-overridable so the same script handles smoke-testing without touching the production install.
 
 ## Cron entry
@@ -97,7 +98,7 @@ ssh kindle 'rm -rf /mnt/us/dashboard'   # optional — wipes script, config, sta
 ## Open items (deferred to post-M2)
 
 - Confirm cron survives a Kindle reboot. The crontab is in rootfs and should — but untested.
-- Reader UI / lock-screen overlay suppression. Leading candidate is the `linkss` screensaver pipeline; see [architecture.md](architecture.md).
+- ~~Reader UI / lock-screen overlay suppression. Leading candidate is the `linkss` screensaver pipeline.~~ Done in M4.1 via screensaver publish — see [recon 2026-05-25-linkss](recon/2026-05-25-linkss.md).
 - Battery / wake-from-sleep behavior under cron-driven refresh.
 
 These do not block server work and are best decided once we have a real dashboard image to test sleep behavior against.

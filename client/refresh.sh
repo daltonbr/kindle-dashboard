@@ -35,6 +35,13 @@ export PATH
 # Number of log lines to keep (older ones are trimmed on each run).
 : "${LOG_LINES:=500}"
 
+# Path to the linkss (NiLuJe screensavers hack) backing file. Kept up to date
+# so the framework's screensaver pipeline (when active) shows the last good
+# dashboard rather than the 2021 placeholder PNG. With the M4.1 sleep+wake
+# daemon, the framework is stopped and this code path is a safety net only.
+# Set SCREENSAVER_PNG="" to disable. See docs/recon/2026-05-25-linkss.md.
+: "${SCREENSAVER_PNG:=/mnt/us/linkss/screensavers/bg_ss00.png}"
+
 OUT="$ROOT/state/last.png"
 TMP="$OUT.tmp"
 LOG="$ROOT/state/last.log"
@@ -75,4 +82,13 @@ if eips -g "$OUT" >/dev/null 2>&1; then
     log "ok"
 else
     log "eips FAILED to draw $OUT"
+fi
+
+# Publish the same PNG as the linkss screensaver image so the dashboard
+# stays visible after the device sleeps. Failure here is non-fatal — the
+# foreground refresh already succeeded.
+if [ -n "$SCREENSAVER_PNG" ] && [ -d "$(dirname "$SCREENSAVER_PNG")" ]; then
+    if ! cp "$OUT" "$SCREENSAVER_PNG" 2>/dev/null; then
+        log "screensaver copy FAILED to $SCREENSAVER_PNG"
+    fi
 fi

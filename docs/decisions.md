@@ -184,3 +184,75 @@ If we ever need release semantics (semver tags), we can add a `v*` tag trigger t
 
 - **Inter / IBM Plex Sans.** Both excellent, both also OFL. Inter is denser (more text per row); Plex feels more "techie". Either would work; Atkinson wins on legibility-at-distance, which matters most for a wall display.
 - **System font discovery / no embed.** Would need `fontconfig` or hand-coded paths inside a `FROM scratch` image where neither exists. Embedding wins on simplicity.
+
+---
+
+## D14 — Sleep + scheduled wake (path A+wake)
+
+**Decision:** The dashboard runs as a long-running daemon that suspends the
+device between refreshes using a sysfs RTC wakealarm. The cron-driven
+`refresh.sh` model is retired in favour of this daemon. Implementation lands
+in M4.x; the architecture and the per-API findings that justify it are in
+[recon 2026-05-25-wake-investigation](recon/2026-05-25-wake-investigation.md).
+
+**Sketch (see recon for full detail):**
+
+```
+prelude:
+    stop framework / lab126_gui
+    scaling_governor = powersave
+    enable wakeup on /sys/class/rtc/rtc1
+
+loop:
+    echo $((now + INTERVAL)) > /sys/class/rtc/rtc1/wakealarm
+    echo mem > /sys/power/state                # blocks; resumes on alarm
+    lipc-set-prop com.lab126.cmd wirelessEnable 0/1   # nudge Wi-Fi
+    refresh dashboard, eips -g, copy to bg_ss00.png
+```
+
+**Why this and not "always on":**
+
+- **Days vs hours of battery.** The K7 in deep `mem` suspend draws sub-mA;
+  always-on with `preventScreenSaver=1` keeps Wi-Fi associated and `cvm`
+  active, burning hours of battery per day. The dashboard is wall-mounted
+  but the user prefers it to be unplugged-tolerant.
+- **Empirical validation.** Three-cycle integrated test landed clean 60s
+  suspends with HTTP fetches succeeding ~7s after each wake. See recon.
+- **The blog's pattern works on this firmware.** With one substitution: the
+  `rtcWakeup` LIPC property declared by `powerd` is actually unimplemented
+  (returns `lipcErrNoSuchProperty`); the sysfs wakealarm path is the real
+  API.
+- **Framework stop is a hard prerequisite, not a power optimisation.** The
+  `cvm` Java processes (Image Fetcher, AWT-EventQueue, LifecycleWorker,
+  AdmDaemon) crash with `undefined instruction` on every resume, and each
+  crash registers a wakeup event that aborts the next `echo mem` in
+  milliseconds. Stopping the framework removes the crash cascade.
+- **Wi-Fi nudge is the standard fix.** Without the framework's nudges, the
+  `cmd`/`wpa_supplicant` daemons stay running but `wlan0` doesn't route
+  packets after resume. Toggling `wirelessEnable` brings it back in ~7s.
+
+**Reversibility / hand-back path:**
+
+- `stop framework` is runtime-only. A reboot restores the stock Kindle UI.
+- Removing the daemon's cron entry (`@reboot`) stops it from auto-starting.
+- linkss screensaver publish stays in `refresh.sh` as a safety net for the
+  fallback case where the daemon is off and the stock framework is active.
+
+**Rejected alternatives:**
+
+- **`preventScreenSaver`-driven always-on.** Tested empirically — works, but
+  burns battery and doesn't give us the "days on a single charge" payoff
+  that was the main motivation for choosing an eink Kindle for the wall.
+- **`linkss` screensaver only.** Image stays visible during sleep (eink
+  hold), but cron is suspended along with the kernel — refreshes only happen
+  when someone walks by and taps. Content stales by up to ~10 min between
+  interactions. See [recon 2026-05-25-linkss](recon/2026-05-25-linkss.md).
+- **LIPC `rtcWakeup`/`wakeUp`.** Declared in `lipc-probe -a` output but
+  return `lipcErrNoSuchProperty` on write. Dead API on this firmware.
+- **busybox `rtcwake`.** Returns "Device or resource busy" — likely the bug
+  the blog hit. Direct sysfs writes work; we don't need the userspace tool.
+
+**Revisit when:** we observe the wake-nudge sequence dropping a refresh in
+practice; we want sub-5-minute refresh cadence (the overhead becomes a
+larger fraction of the cycle); or we need a different wake source (calendar
+events, push notifications) than fixed-interval polling.
