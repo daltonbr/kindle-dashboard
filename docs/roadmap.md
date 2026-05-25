@@ -75,12 +75,12 @@ Each sub-task below is small enough to land as its own PR; the order matters bec
 - [x] `/dashboard.png` from the deployed server shows real weather.
 - [x] Confirmed on the Kindle panel.
 
-### M3.5 — Compose the weather panel (after first deploy)
+### M3.5 — Compose the weather panel (after first deploy) ✅
 
-Reordered: wired into `main.go` first with the M2-style basicfont layout so we can see weather on the wall sooner. M3.5 then refactors the layout, M3.4 swaps fonts.
+Reordered: wired into `main.go` first with the M2-style basicfont layout so we can see weather on the wall sooner. M3.5 then refactored the layout, M3.4 swaps fonts.
 
-- [ ] Refactor `render.Dashboard` to delegate to `panels.Weather(ctx, w *image.Gray, area image.Rectangle, forecast Forecast)`. The "panel" abstraction is what lets M4+ stack more cards.
-- [ ] Layout: large current temp + condition word, smaller "today H/L", a 24h temperature curve at the bottom (skip if it's getting complicated; a row of hourly numbers is fine).
+- [x] `server/internal/render/panels/weather.go` with `Weather(dst, area, forecast)`. `dashboard.go` now only owns header/footer/panel placement.
+- [x] Layout: current temp, condition word (WMO code → label), today H/L, observation time, fetch time, and a Bresenham line chart of the next 24h with min/max labels and 6-hourly tick marks along the bottom axis.
 
 ### M3.4 — Real fonts (embed a TTF) (after M3.5)
 

@@ -1,7 +1,6 @@
-// Package render composes the dashboard image.
-//
-// M3 step 1: weather data is wired in but layout/typography are still the
-// M2 placeholder. M3.5 will refactor into proper panels; M3.4 swaps fonts.
+// Package render composes the dashboard image. It owns the page-level layout
+// (header, footer, panel placement) and delegates per-card drawing to
+// internal/render/panels.
 package render
 
 import (
@@ -15,6 +14,7 @@ import (
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
 
+	"github.com/daltonbr/kindle-dashboard/server/internal/render/panels"
 	"github.com/daltonbr/kindle-dashboard/server/internal/weather"
 )
 
@@ -22,7 +22,6 @@ import (
 // Pass forecast=nil to render the "weather unavailable" state.
 func Dashboard(w, h int, now time.Time, forecast *weather.Forecast) *image.Gray {
 	img := image.NewGray(image.Rect(0, 0, w, h))
-
 	fill(img, img.Bounds(), 255)
 
 	// Double border so we can spot cropping on the panel.
@@ -32,26 +31,14 @@ func Dashboard(w, h int, now time.Time, forecast *weather.Forecast) *image.Gray 
 	drawText(img, "Kindle Dashboard", 40, 50, 0)
 	drawText(img, fmt.Sprintf("Served at %s", now.Format("2006-01-02 15:04:05 MST")), 40, 80, 0)
 
-	drawText(img, "Weather", 40, 140, 0)
+	weatherArea := image.Rect(20, 110, w-20, h-60)
 	if forecast != nil {
-		drawText(img, fmt.Sprintf("Now: %.1f C  (code %d)", forecast.Now.TempC, forecast.Now.WeatherCode), 40, 170, 0)
-		drawText(img, fmt.Sprintf("Today: H %.1f / L %.1f", forecast.HighToday, forecast.LowToday), 40, 195, 0)
-		drawText(img, fmt.Sprintf("Observed at %s", forecast.Now.Time.Format("15:04 MST")), 40, 220, 0)
-		drawText(img, fmt.Sprintf("Fetched at %s", forecast.FetchedAt.Format("15:04:05 UTC")), 40, 245, 0)
+		panels.Weather(img, weatherArea, *forecast)
 	} else {
-		drawText(img, "(weather unavailable)", 40, 170, 0)
+		drawText(img, "Weather: (unavailable)", weatherArea.Min.X+20, weatherArea.Min.Y+30, 0)
 	}
 
-	// 16-level grayscale ramp. Validates the panel actually renders grays.
-	rampY := 450
-	for i := range 16 {
-		x := 40 + i*32
-		fill(img, image.Rect(x, rampY, x+30, rampY+80), uint8(i*17))
-		strokeRect(img, image.Rect(x, rampY, x+30, rampY+80), 0)
-	}
-	drawText(img, "16-level grayscale ramp", 40, rampY+100, 0)
-
-	drawText(img, "kindle-dashboard / github.com/daltonbr", 40, h-40, 0)
+	drawText(img, "kindle-dashboard / github.com/daltonbr", 40, h-30, 0)
 
 	return img
 }
