@@ -11,43 +11,60 @@ import (
 	"image/color"
 
 	"golang.org/x/image/font"
-	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
 
+	"github.com/daltonbr/kindle-dashboard/server/internal/render/fonts"
 	"github.com/daltonbr/kindle-dashboard/server/internal/weather"
 )
 
 // Weather paints the weather card inside area.
 func Weather(dst *image.Gray, area image.Rectangle, forecast weather.Forecast) {
-	const padding = 20
-	x := area.Min.X + padding
-	y := area.Min.Y + 25
+	const (
+		padding       = 20
+		bigTempSize   = 110
+		conditionSize = 32
+		bodySize      = 18
+		smallSize     = 14
+	)
 
-	drawText(dst, "Weather", x, y, 0)
-	y += 40
+	centerX := (area.Min.X + area.Max.X) / 2
 
-	drawText(dst, fmt.Sprintf("%.1f C", forecast.Now.TempC), x, y, 0)
-	y += 25
+	// Big centered current temperature.
+	tempY := area.Min.Y + 140
+	drawCentered(dst, fonts.Face(bigTempSize),
+		fmt.Sprintf("%.1f°C", forecast.Now.TempC), centerX, tempY, 0)
 
-	drawText(dst, conditionWord(forecast.Now.WeatherCode), x, y, 0)
-	y += 30
+	// Condition word, centered below.
+	condY := tempY + 60
+	drawCentered(dst, fonts.Face(conditionSize),
+		conditionWord(forecast.Now.WeatherCode), centerX, condY, 0)
 
-	drawText(dst, fmt.Sprintf("Today  H %.1f  /  L %.1f", forecast.HighToday, forecast.LowToday), x, y, 0)
-	y += 25
+	// Today's H / L, centered.
+	hlY := condY + 50
+	drawCentered(dst, fonts.Face(bodySize),
+		fmt.Sprintf("Today   H %.1f°   L %.1f°", forecast.HighToday, forecast.LowToday),
+		centerX, hlY, 0)
 
-	drawText(dst, fmt.Sprintf("Observed %s", forecast.Now.Time.Format("15:04 MST")), x, y, 0)
-	y += 25
-	drawText(dst, fmt.Sprintf("Fetched  %s", forecast.FetchedAt.Format("15:04:05 UTC")), x, y, 0)
+	// Small observation/fetch timestamps, left-aligned at the bottom of the
+	// header region so they stay subordinate to the big temp.
+	footnoteY := hlY + 35
+	smallFace := fonts.Face(smallSize)
+	drawAt(dst, smallFace,
+		fmt.Sprintf("Observed %s   ·   fetched %s",
+			forecast.Now.Time.Format("15:04"),
+			forecast.FetchedAt.Format("15:04:05 UTC")),
+		area.Min.X+padding, footnoteY, 80)
 
-	if len(forecast.Next24h) > 0 {
-		chart := image.Rect(area.Min.X+padding, area.Max.Y-200, area.Max.X-padding, area.Max.Y-40)
-		drawText(dst, "Next 24 hours", area.Min.X+padding, chart.Min.Y-10, 0)
+	// 24h temperature chart at the bottom of the area.
+	if len(forecast.Next24h) > 1 {
+		chart := image.Rect(area.Min.X+padding, area.Max.Y-180, area.Max.X-padding, area.Max.Y-40)
+		drawAt(dst, fonts.Face(bodySize), "Next 24 hours", area.Min.X+padding, chart.Min.Y-12, 0)
 		draw24hChart(dst, chart, forecast.Next24h)
 	}
 }
 
 // conditionWord maps a WMO weather code to a short human label. Anything we
-// don't recognise becomes "Unknown" rather than blowing up the render.
+// don't recognise becomes "Code N" rather than blowing up the render.
 //
 // Reference: https://open-meteo.com/en/docs (WMO Weather interpretation codes)
 func conditionWord(code int) string {
@@ -87,8 +104,8 @@ func conditionWord(code int) string {
 	}
 }
 
-// draw24hChart paints a simple line chart of the hourly temperatures inside
-// area. Includes a baseline and a label at min/max.
+// draw24hChart paints a line chart of hourly temperatures inside area, with
+// min/max labels and 6-hourly hour ticks along the bottom.
 func draw24hChart(dst *image.Gray, area image.Rectangle, hourly []weather.HourlyReading) {
 	if len(hourly) < 2 {
 		return
@@ -103,20 +120,18 @@ func draw24hChart(dst *image.Gray, area image.Rectangle, hourly []weather.Hourly
 			maxT = h.TempC
 		}
 	}
-	// Avoid a degenerate range (flat line) producing a divide-by-zero.
 	if maxT-minT < 0.5 {
 		maxT = minT + 1
 	}
 
-	// Reserve some headroom inside area so labels don't overlap the line.
-	plot := image.Rect(area.Min.X, area.Min.Y+10, area.Max.X, area.Max.Y-15)
+	plot := image.Rect(area.Min.X, area.Min.Y+10, area.Max.X, area.Max.Y-20)
 
-	// Bottom axis.
+	// Bottom axis (a touch lighter so it sits behind the line).
 	for px := plot.Min.X; px < plot.Max.X; px++ {
-		dst.SetGray(px, plot.Max.Y, color.Gray{Y: 100})
+		dst.SetGray(px, plot.Max.Y, color.Gray{Y: 120})
 	}
 
-	// Line through the hourly points.
+	// 1-px line through the hourly points.
 	n := len(hourly)
 	prevX, prevY := -1, -1
 	for i, h := range hourly {
@@ -128,20 +143,37 @@ func draw24hChart(dst *image.Gray, area image.Rectangle, hourly []weather.Hourly
 		prevX, prevY = px, py
 	}
 
-	// Hour ticks every 6h with the hour-of-day under the tick.
+	// Hour ticks every 6h with the hour-of-day underneath.
+	tickFace := fonts.Face(12)
 	for i, h := range hourly {
 		if h.Time.Hour()%6 != 0 {
 			continue
 		}
 		px := plot.Min.X + (plot.Dx()*i)/(n-1)
-		for ty := plot.Max.Y; ty <= plot.Max.Y+3; ty++ {
+		for ty := plot.Max.Y; ty <= plot.Max.Y+4; ty++ {
 			dst.SetGray(px, ty, color.Gray{Y: 0})
 		}
-		drawText(dst, fmt.Sprintf("%02d", h.Time.Hour()), px-7, plot.Max.Y+15, 0)
+		drawCentered(dst, tickFace, fmt.Sprintf("%02d", h.Time.Hour()), px, plot.Max.Y+16, 0)
 	}
 
-	drawText(dst, fmt.Sprintf("max %.1f", maxT), plot.Max.X-50, plot.Min.Y, 0)
-	drawText(dst, fmt.Sprintf("min %.1f", minT), plot.Max.X-50, plot.Max.Y-2, 0)
+	labelFace := fonts.Face(12)
+	drawAt(dst, labelFace, fmt.Sprintf("max %.1f°", maxT), plot.Max.X-60, plot.Min.Y+2, 0)
+	drawAt(dst, labelFace, fmt.Sprintf("min %.1f°", minT), plot.Max.X-60, plot.Max.Y-3, 0)
+}
+
+func drawAt(dst *image.Gray, face font.Face, s string, x, y int, gray uint8) {
+	d := &font.Drawer{
+		Dst:  dst,
+		Src:  &image.Uniform{C: color.Gray{Y: gray}},
+		Face: face,
+		Dot:  fixed.P(x, y),
+	}
+	d.DrawString(s)
+}
+
+func drawCentered(dst *image.Gray, face font.Face, s string, cx, y int, gray uint8) {
+	w := font.MeasureString(face, s).Round()
+	drawAt(dst, face, s, cx-w/2, y, gray)
 }
 
 // drawLine paints a 1-pixel line from (x0,y0) to (x1,y1) using Bresenham.
@@ -179,14 +211,4 @@ func abs(v int) int {
 		return -v
 	}
 	return v
-}
-
-func drawText(dst *image.Gray, s string, x, y int, gray uint8) {
-	d := &font.Drawer{
-		Dst:  dst,
-		Src:  &image.Uniform{C: color.Gray{Y: gray}},
-		Face: basicfont.Face7x13,
-		Dot:  fixed.Point26_6{X: fixed.I(x), Y: fixed.I(y)},
-	}
-	d.DrawString(s)
 }

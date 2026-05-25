@@ -82,12 +82,12 @@ Reordered: wired into `main.go` first with the M2-style basicfont layout so we c
 - [x] `server/internal/render/panels/weather.go` with `Weather(dst, area, forecast)`. `dashboard.go` now only owns header/footer/panel placement.
 - [x] Layout: current temp, condition word (WMO code → label), today H/L, observation time, fetch time, and a Bresenham line chart of the next 24h with min/max labels and 6-hourly tick marks along the bottom axis.
 
-### M3.4 — Real fonts (embed a TTF) (after M3.5)
+### M3.4 — Real fonts (embed a TTF) (after M3.5) ✅
 
-- [ ] Pick an open-license TTF (candidates: Inter, IBM Plex Sans, Atkinson Hyperlegible). Commit it under `server/internal/render/fonts/`.
-- [ ] Add `golang.org/x/image/font/opentype` to `go.mod` and document in [decisions.md](decisions.md) (new D entry).
-- [ ] Embed with `//go:embed`. Provide a `Face(size float64) font.Face` helper in `internal/render/fonts/`.
-- [ ] Migrate existing text to the new font; delete the basicfont references.
+- [x] Atkinson Hyperlegible (OFL) committed to `server/internal/render/fonts/` alongside `OFL.txt`.
+- [x] `golang.org/x/image/font/opentype` pulled in via existing `golang.org/x/image` dep. New decision: [D13](decisions.md).
+- [x] `//go:embed` + `fonts.Face(sizePx float64) font.Face` with per-size caching.
+- [x] Migrated `panels/weather.go` and `dashboard.go` to the new font; basicfont references deleted.
 
 ---
 

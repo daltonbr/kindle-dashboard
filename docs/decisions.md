@@ -100,9 +100,9 @@ Originally written as "4-bit"; updated after on-device verification.
 
 ---
 
-## D8 — Server text rendering: `golang.org/x/image/font/basicfont`
+## D8 — Server text rendering: `basicfont` (M2) → `opentype` + Atkinson Hyperlegible (M3.4)
 
-**Decision:** Use `basicfont.Face7x13` for M2's text. Migrate to embedded TTF (`golang.org/x/image/font/opentype`) in M3 when the weather panel needs nicer typography.
+**Decision:** M2 used `basicfont.Face7x13` as a no-asset placeholder. M3.4 swapped to an embedded Atkinson Hyperlegible TTF via `golang.org/x/image/font/opentype`. See [D13](#d13--font-atkinson-hyperlegible-embedded).
 
 **Why:**
 
@@ -162,3 +162,25 @@ If we ever need release semantics (semver tags), we can add a `v*` tag trigger t
 - Keeps the client small and easy to reason about. Adding retries means picking a strategy (count, backoff, idempotency assumptions) and writing tests for it — disproportionate effort right now.
 
 **Revisit when:** we see real cold-start fetch failures often enough to be annoying, or we start depending on a less-reliable upstream than Open-Meteo.
+
+---
+
+## D13 — Font: Atkinson Hyperlegible (embedded)
+
+**Decision:** Ship `AtkinsonHyperlegible-Regular.ttf` embedded into the binary via `//go:embed`. Use `golang.org/x/image/font/opentype` to produce per-size faces, cached.
+
+**Why:**
+
+- **Designed for low-vision readability** — the Braille Institute's brief was differentiating commonly confused glyphs (slashed 0, distinct I/l/1). That's exactly what we want at a 600×800 panel viewed from across a room.
+- **Crisp at small sizes.** Renders cleanly at the ~12–16 px label sizes we need for the chart axis without going to subpixel territory the eink panel can't show anyway.
+- **Open Font License.** Permissive, ships with the binary, no runtime fetch.
+- **`golang.org/x/image/font/opentype`** is already in the dep graph (we were using `basicfont` from the same module). No new top-level dependency.
+
+**Layout sizes (current):** 110 px for the big current temp, 32 for the condition word, 28 for the page header, 18 for body, 12–14 for labels.
+
+**Asset hygiene:** `OFL.txt` lives next to the TTF in `server/internal/render/fonts/`. Required by the license.
+
+**Rejected alternatives:**
+
+- **Inter / IBM Plex Sans.** Both excellent, both also OFL. Inter is denser (more text per row); Plex feels more "techie". Either would work; Atkinson wins on legibility-at-distance, which matters most for a wall display.
+- **System font discovery / no embed.** Would need `fontconfig` or hand-coded paths inside a `FROM scratch` image where neither exists. Embedding wins on simplicity.
