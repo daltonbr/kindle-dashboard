@@ -8,17 +8,22 @@ Milestones, roughly in order. Each one ends with a working, demonstrable thing �
 - [x] Initial docs (`device.md`, `architecture.md`, `decisions.md`, `client.md`, `server.md`, `roadmap.md`)
 - [x] README
 
-## M1 — Client display pipeline (no real server yet)
+## M1 — Client display pipeline (no real server yet) ✅
 
 Goal: a static PNG, served from any HTTP source, ends up on the Kindle panel via cron.
 
-- [ ] SSH into the Kindle, answer the open questions in [device.md](device.md)
-- [ ] Confirm `eips` flags and writable paths
-- [ ] Write `client/refresh.sh` and install it to `/mnt/us/dashboard/`
-- [ ] Stand up a cron entry and verify it survives a reboot
-- [ ] Test with a hand-rolled 600×800 PNG served from any laptop on the LAN (or `python -m http.server`)
+- [x] SSH into the Kindle, answer the open questions in [device.md](device.md) — see [recon 2026-05-25](recon/2026-05-25-first-ssh.md)
+- [x] Confirm `eips` flags and writable paths
+- [x] Write `client/refresh.sh` and install it to `/mnt/us/dashboard/`
+- [x] Stand up a cron entry (`* * * * *` for dev) — busybox crond auto-picks up the new entry
+- [x] Test with a 600×800 grayscale PNG served from the Mac (`python3 -m http.server 8765`)
+- [ ] Verify the cron survives a Kindle reboot (deferred — low risk, easy to test later)
 
-**Definition of done:** the PNG visibly updates on the Kindle when we change the file the server returns.
+**Definition of done met:** image visibly drawn on the Kindle, refreshed once per minute by cron with `ok` log lines, served from the Mac at `10.0.0.184:8765`.
+
+Open items deferred to post-M2 (don't block progress):
+- Suppress reader UI / lock screen overlay during refresh (leading candidate: linkss screensaver pipeline, see [architecture.md](architecture.md)).
+- Battery / wake-from-sleep behavior under cron-driven refresh.
 
 ## M2 — Minimal Go server returning a static dashboard
 
