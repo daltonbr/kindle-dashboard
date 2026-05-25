@@ -93,16 +93,18 @@ func (c *Client) buildURL(lat, lon float64) string {
 	q.Set("daily", "temperature_2m_max,temperature_2m_min")
 	q.Set("hourly", "temperature_2m")
 	q.Set("timezone", "auto")
-	q.Set("forecast_days", "2")
+	q.Set("forecast_days", "3")
 	return c.baseURL + "/v1/forecast?" + q.Encode()
 }
 
 // openMeteoResponse mirrors the JSON shape we care about.
+//
 // Timestamps come back as local-time strings without offset (e.g. "2026-05-25T17:00")
-// because we request timezone=auto. We parse them as naive UTC purely so they're
-// mutually comparable — the absolute zone doesn't matter for slicing.
+// because we request timezone=auto. We combine them with utc_offset_seconds to
+// produce real time.Time values that compare correctly to time.Now().
 type openMeteoResponse struct {
-	Current struct {
+	UTCOffsetSeconds int `json:"utc_offset_seconds"`
+	Current          struct {
 		Time        string  `json:"time"`
 		Temperature float64 `json:"temperature_2m"`
 		WeatherCode int     `json:"weather_code"`
@@ -121,7 +123,9 @@ type openMeteoResponse struct {
 const apiTimeLayout = "2006-01-02T15:04"
 
 func (r openMeteoResponse) toForecast() (Forecast, error) {
-	currentTime, err := time.Parse(apiTimeLayout, r.Current.Time)
+	loc := time.FixedZone("api", r.UTCOffsetSeconds)
+
+	currentTime, err := time.ParseInLocation(apiTimeLayout, r.Current.Time, loc)
 	if err != nil {
 		return Forecast{}, fmt.Errorf("parse current.time %q: %w", r.Current.Time, err)
 	}
@@ -135,7 +139,7 @@ func (r openMeteoResponse) toForecast() (Forecast, error) {
 			len(r.Hourly.Time), len(r.Hourly.Temperature))
 	}
 
-	hourly, err := buildHourly(r.Hourly.Time, r.Hourly.Temperature)
+	hourly, err := buildHourly(r.Hourly.Time, r.Hourly.Temperature, loc)
 	if err != nil {
 		return Forecast{}, err
 	}
@@ -155,10 +159,10 @@ func (r openMeteoResponse) toForecast() (Forecast, error) {
 	}, nil
 }
 
-func buildHourly(times []string, temps []float64) ([]HourlyReading, error) {
+func buildHourly(times []string, temps []float64, loc *time.Location) ([]HourlyReading, error) {
 	out := make([]HourlyReading, 0, len(times))
 	for i, ts := range times {
-		t, err := time.Parse(apiTimeLayout, ts)
+		t, err := time.ParseInLocation(apiTimeLayout, ts, loc)
 		if err != nil {
 			return nil, fmt.Errorf("parse hourly time %q: %w", ts, err)
 		}

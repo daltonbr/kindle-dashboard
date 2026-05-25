@@ -38,25 +38,28 @@ func TestFetch_DecodesBrightonFixture(t *testing.T) {
 		"daily=temperature_2m_max%2Ctemperature_2m_min",
 		"hourly=temperature_2m",
 		"timezone=auto",
-		"forecast_days=2",
+		"forecast_days=3",
 	} {
 		if !strings.Contains(capturedQuery, want) {
 			t.Errorf("query missing %q; got %q", want, capturedQuery)
 		}
 	}
 
-	if fc.Now.TempC != 30.1 {
-		t.Errorf("Now.TempC = %v, want 30.1", fc.Now.TempC)
+	// Brighton fixture: BST (UTC+1) on 2026-05-25, current observation at 16:15 local.
+	bst := time.FixedZone("BST", 3600)
+	wantNow := time.Date(2026, 5, 25, 16, 15, 0, 0, bst)
+
+	if fc.Now.TempC != 29.9 {
+		t.Errorf("Now.TempC = %v, want 29.9", fc.Now.TempC)
 	}
 	if fc.Now.WeatherCode != 0 {
 		t.Errorf("Now.WeatherCode = %v, want 0", fc.Now.WeatherCode)
 	}
-	wantNow := time.Date(2026, 5, 25, 16, 0, 0, 0, time.UTC)
 	if !fc.Now.Time.Equal(wantNow) {
 		t.Errorf("Now.Time = %v, want %v", fc.Now.Time, wantNow)
 	}
-	if fc.HighToday != 30.5 {
-		t.Errorf("HighToday = %v, want 30.5", fc.HighToday)
+	if fc.HighToday != 30.3 {
+		t.Errorf("HighToday = %v, want 30.3", fc.HighToday)
 	}
 	if fc.LowToday != 18.5 {
 		t.Errorf("LowToday = %v, want 18.5", fc.LowToday)
@@ -64,12 +67,13 @@ func TestFetch_DecodesBrightonFixture(t *testing.T) {
 	if got := len(fc.Next24h); got != 24 {
 		t.Fatalf("len(Next24h) = %d, want 24", got)
 	}
-	// First Next24h entry should be the same hour as Now (16:00 on the 25th).
-	if !fc.Next24h[0].Time.Equal(wantNow) {
-		t.Errorf("Next24h[0].Time = %v, want %v", fc.Next24h[0].Time, wantNow)
+	// Current is at 16:15; first hourly entry at or after that is 17:00 local.
+	wantFirst := time.Date(2026, 5, 25, 17, 0, 0, 0, bst)
+	if !fc.Next24h[0].Time.Equal(wantFirst) {
+		t.Errorf("Next24h[0].Time = %v, want %v", fc.Next24h[0].Time, wantFirst)
 	}
-	// Last Next24h entry should be 23h after that (15:00 next day).
-	wantLast := wantNow.Add(23 * time.Hour)
+	// And the 24th entry should be 23h after that.
+	wantLast := wantFirst.Add(23 * time.Hour)
 	if !fc.Next24h[23].Time.Equal(wantLast) {
 		t.Errorf("Next24h[23].Time = %v, want %v", fc.Next24h[23].Time, wantLast)
 	}
