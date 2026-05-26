@@ -220,11 +220,13 @@ while :; do
         # Still do a refresh so the dashboard stays current while the
         # operator works. Wi-Fi is already up (no suspend happened), so
         # skip the wireless nudge.
+        read_battery
         if fetch_with_poll && validate_png; then
             draw
         else
             rm -f "$TMP"
         fi
+        sample_battery
         trim_log
         continue
     fi
