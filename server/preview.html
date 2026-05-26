@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kindle Dashboard preview</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: -apple-system, system-ui, sans-serif; background: #1a1a1a; color: #eee; margin: 0; padding: 1rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+  h1 { margin: 0; font-size: 1.1rem; font-weight: 500; opacity: 0.7; }
+  .controls { display: flex; gap: 1rem; align-items: center; font-size: 0.9rem; }
+  .controls input[type=number] { width: 5rem; background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 0.25rem 0.5rem; border-radius: 4px; }
+  .controls button { background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
+  .controls button:hover { background: #333; }
+  .status { font-size: 0.8rem; opacity: 0.6; min-height: 1em; }
+  img { background: #fff; border: 1px solid #444; max-width: 100%; height: auto; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<h1>kindle-dashboard · live preview</h1>
+<div class="controls">
+  <label>refresh every <input id="interval" type="number" value="30" min="1" step="1">s</label>
+  <button id="now">refresh now</button>
+  <label><input id="auto" type="checkbox" checked> auto</label>
+</div>
+<img id="img" alt="dashboard" width="600" height="800">
+<div class="status" id="status">loading…</div>
+<script>
+(function () {
+  const img = document.getElementById('img');
+  const status = document.getElementById('status');
+  const intervalInput = document.getElementById('interval');
+  const autoCheckbox = document.getElementById('auto');
+  let timer = null;
+
+  function refresh() {
+    const t = Date.now();
+    img.src = '/dashboard.png?t=' + t;
+    status.textContent = 'refreshed at ' + new Date(t).toLocaleTimeString();
+  }
+
+  function schedule() {
+    if (timer !== null) { clearInterval(timer); timer = null; }
+    if (!autoCheckbox.checked) return;
+    const secs = Math.max(1, parseInt(intervalInput.value, 10) || 30);
+    timer = setInterval(refresh, secs * 1000);
+  }
+
+  intervalInput.addEventListener('change', schedule);
+  autoCheckbox.addEventListener('change', schedule);
+  document.getElementById('now').addEventListener('click', refresh);
+
+  refresh();
+  schedule();
+})();
+</script>
+</body>
+</html>

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"image/png"
 	"log/slog"
@@ -15,6 +16,9 @@ import (
 	"github.com/daltonbr/kindle-dashboard/server/internal/render"
 	"github.com/daltonbr/kindle-dashboard/server/internal/weather"
 )
+
+//go:embed preview.html
+var previewHTML []byte
 
 const (
 	panelWidth  = 600
@@ -40,6 +44,10 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(cache))
 	mux.HandleFunc("GET /healthz", handleHealth)
+	mux.HandleFunc("GET /preview", handlePreview)
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/preview", http.StatusFound)
+	})
 
 	srv := &http.Server{
 		Addr:         ":" + port,
@@ -109,6 +117,12 @@ func makeDashboardHandler(cache *weather.Cache) http.HandlerFunc {
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok\n"))
+}
+
+func handlePreview(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(previewHTML)
 }
 
 func logRequests(next http.Handler) http.Handler {

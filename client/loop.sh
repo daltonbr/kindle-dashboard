@@ -28,6 +28,11 @@ export PATH
 : "${INTERVAL:=300}"
 : "${SCREENSAVER_PNG:=/mnt/us/linkss/screensavers/bg_ss00.png}"
 
+# Every Nth refresh cycle, use `eips -f -g` (full flashing waveform) instead
+# of `eips -g` (partial refresh) to clear accumulated eink ghosting. Default
+# 12 = once per hour at INTERVAL=300. Set to 0 to disable.
+: "${GHOST_REFRESH_EVERY:=12}"
+
 # Which RTC to use for the wake alarm. rtc1 = max77696-rtc.1 (PMIC channel 1).
 : "${RTC:=/sys/class/rtc/rtc1}"
 
@@ -98,7 +103,12 @@ trap cleanup EXIT INT TERM
 # each is needed. Errors are logged but not fatal; the loop can survive a
 # partial prelude (e.g. governor write failing) better than no daemon at all.
 
-log "loop.sh starting (pid=$$, interval=${INTERVAL}s)"
+log "loop.sh starting (pid=$$, interval=${INTERVAL}s, ghost-refresh-every=${GHOST_REFRESH_EVERY})"
+
+# Counter used by the ghost-refresh policy. Starts at 1 so the first cycle
+# (cycle_count == 1) does a partial refresh; the first full flash is on
+# cycle GHOST_REFRESH_EVERY itself.
+cycle_count=0
 
 # 1. Stop the framework. Without this, cvm's `undefined instruction` JIT
 #    crashes on every resume register wakeup events that abort the next
@@ -151,7 +161,15 @@ validate_png() {
 
 draw() {
     mv "$TMP" "$OUT"
-    eips -g "$OUT" >/dev/null 2>&1 || log "eips FAILED to draw $OUT"
+    # Periodic full-flash refresh clears accumulated eink ghosting. Partial
+    # refresh (the default `eips -g`) leaves faint after-images from prior
+    # frames; -f forces a full flashing waveform that resets the pixels.
+    if [ "$GHOST_REFRESH_EVERY" -gt 0 ] && [ $(( cycle_count % GHOST_REFRESH_EVERY )) -eq 0 ]; then
+        log "ghost-refresh cycle ($cycle_count) — using full flash"
+        eips -f -g "$OUT" >/dev/null 2>&1 || log "eips -f FAILED to draw $OUT"
+    else
+        eips -g "$OUT" >/dev/null 2>&1 || log "eips FAILED to draw $OUT"
+    fi
     if [ -n "$SCREENSAVER_PNG" ] && [ -d "$(dirname "$SCREENSAVER_PNG")" ]; then
         cp "$OUT" "$SCREENSAVER_PNG" 2>/dev/null \
             || log "screensaver copy FAILED to $SCREENSAVER_PNG"
@@ -168,6 +186,7 @@ sample_battery() {
 
 while :; do
     cycle_start=$(date +%s)
+    cycle_count=$(( cycle_count + 1 ))
 
     # Maintenance mode: while the flag file exists, skip suspend entirely
     # and just refresh on a short polling interval. Lets the operator
