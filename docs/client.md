@@ -18,7 +18,7 @@ All under `/mnt/us/dashboard/` (the user-writable partition; survives reboots, u
     loop.log        # loop.sh log, auto-trimmed to LOG_LINES (default 2000)
     loop.pid        # PID of the running daemon (cleaned up on graceful exit)
     maintenance     # touch this file to put the daemon in maintenance mode (no suspend)
-    batt.csv        # one row per cycle: epoch,battLevel — produced by loop.sh
+    batt.csv        # one row per cycle: epoch,battLevel,charging (0/1) — produced by loop.sh
     crontab.bak     # M1 snapshot of /etc/crontab/root
     crontab.m4.bak  # M4 snapshot, taken before swapping refresh.sh cron for loop.sh
 ```
