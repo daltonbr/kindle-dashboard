@@ -23,8 +23,9 @@ func Weather(dst *image.Gray, area image.Rectangle, forecast weather.Forecast) {
 		padding       = 20
 		bigTempSize   = 110
 		conditionSize = 32
-		bodySize      = 18
-		smallSize     = 14
+		hiloSize      = 24
+		labelSize     = 22
+		footnoteSize  = 18
 	)
 
 	centerX := (area.Min.X + area.Max.X) / 2
@@ -40,25 +41,24 @@ func Weather(dst *image.Gray, area image.Rectangle, forecast weather.Forecast) {
 		conditionWord(forecast.Now.WeatherCode), centerX, condY, 0)
 
 	// Today's H / L, centered.
-	hlY := condY + 50
-	drawCentered(dst, fonts.Face(bodySize),
+	hlY := condY + 60
+	drawCentered(dst, fonts.Face(hiloSize),
 		fmt.Sprintf("Today   H %.1f°   L %.1f°", forecast.HighToday, forecast.LowToday),
 		centerX, hlY, 0)
 
-	// Small observation/fetch timestamps, left-aligned at the bottom of the
-	// header region so they stay subordinate to the big temp.
-	footnoteY := hlY + 35
-	smallFace := fonts.Face(smallSize)
-	drawAt(dst, smallFace,
-		fmt.Sprintf("Observed %s   ·   fetched %s",
+	// Observation/fetch timestamps. Short, left-aligned, subordinate to the
+	// big temp by virtue of size + ligher gray.
+	footnoteY := hlY + 40
+	drawAt(dst, fonts.Face(footnoteSize),
+		fmt.Sprintf("Reading %s · fetched %s",
 			forecast.Now.Time.Format("15:04"),
-			forecast.FetchedAt.Format("15:04:05 UTC")),
+			forecast.FetchedAt.Format("15:04")),
 		area.Min.X+padding, footnoteY, 80)
 
 	// 24h temperature chart at the bottom of the area.
 	if len(forecast.Next24h) > 1 {
 		chart := image.Rect(area.Min.X+padding, area.Max.Y-180, area.Max.X-padding, area.Max.Y-40)
-		drawAt(dst, fonts.Face(bodySize), "Next 24 hours", area.Min.X+padding, chart.Min.Y-12, 0)
+		drawAt(dst, fonts.Face(labelSize), "Next 24 hours", area.Min.X+padding, chart.Min.Y-14, 0)
 		draw24hChart(dst, chart, forecast.Next24h)
 	}
 }
@@ -144,7 +144,7 @@ func draw24hChart(dst *image.Gray, area image.Rectangle, hourly []weather.Hourly
 	}
 
 	// Hour ticks every 6h with the hour-of-day underneath.
-	tickFace := fonts.Face(12)
+	tickFace := fonts.Face(16)
 	for i, h := range hourly {
 		if h.Time.Hour()%6 != 0 {
 			continue
@@ -153,12 +153,12 @@ func draw24hChart(dst *image.Gray, area image.Rectangle, hourly []weather.Hourly
 		for ty := plot.Max.Y; ty <= plot.Max.Y+4; ty++ {
 			dst.SetGray(px, ty, color.Gray{Y: 0})
 		}
-		drawCentered(dst, tickFace, fmt.Sprintf("%02d", h.Time.Hour()), px, plot.Max.Y+16, 0)
+		drawCentered(dst, tickFace, fmt.Sprintf("%02d", h.Time.Hour()), px, plot.Max.Y+18, 0)
 	}
 
-	labelFace := fonts.Face(12)
-	drawAt(dst, labelFace, fmt.Sprintf("max %.1f°", maxT), plot.Max.X-60, plot.Min.Y+2, 0)
-	drawAt(dst, labelFace, fmt.Sprintf("min %.1f°", minT), plot.Max.X-60, plot.Max.Y-3, 0)
+	labelFace := fonts.Face(16)
+	drawAt(dst, labelFace, fmt.Sprintf("max %.1f°", maxT), plot.Max.X-80, plot.Min.Y+4, 0)
+	drawAt(dst, labelFace, fmt.Sprintf("min %.1f°", minT), plot.Max.X-80, plot.Max.Y-4, 0)
 }
 
 func drawAt(dst *image.Gray, face font.Face, s string, x, y int, gray uint8) {

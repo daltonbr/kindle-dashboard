@@ -28,20 +28,22 @@ func Dashboard(w, h int, now time.Time, forecast *weather.Forecast) *image.Gray 
 	strokeRect(img, image.Rect(8, 8, w-8, h-8), 0)
 
 	headerFace := fonts.Face(28)
-	subFace := fonts.Face(14)
+	dateFace := fonts.Face(28)
+	timeFace := fonts.Face(18)
+	footerFace := fonts.Face(16)
 	drawAt(img, headerFace, "Kindle Dashboard", 30, 50, 0)
-	drawAt(img, subFace, fmt.Sprintf("Served at %s", now.Format("2006-01-02 15:04:05 MST")),
-		30, 75, 80)
+	drawAt(img, dateFace, now.Format("Mon 2 Jan"), 30, 88, 0)
+	drawAt(img, timeFace, fmt.Sprintf("updated %s", now.Format("15:04")), 30, 110, 80)
 
-	weatherArea := image.Rect(20, 100, w-20, h-50)
+	weatherArea := image.Rect(20, 130, w-20, h-50)
 	if forecast != nil {
 		panels.Weather(img, weatherArea, *forecast)
 	} else {
-		drawAt(img, fonts.Face(20), "Weather: (unavailable)",
+		drawAt(img, fonts.Face(24), "Weather: (unavailable)",
 			weatherArea.Min.X+20, weatherArea.Min.Y+40, 0)
 	}
 
-	drawAt(img, subFace, "kindle-dashboard · github.com/daltonbr", 30, h-20, 100)
+	drawAt(img, footerFace, "kindle-dashboard · github.com/daltonbr", 30, h-20, 100)
 
 	return img
 }
