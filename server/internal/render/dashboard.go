@@ -78,11 +78,16 @@ func drawBattery(img *image.Gray, area image.Rectangle, b Battery) {
 		notchH   = 10
 		padInner = 3
 		gap      = 8
+		boltSlot = 18 // horizontal slot reserved between icon and number when charging
 	)
 
-	// Right-align: number on the right, icon to its left.
+	// Right-align: number on the right, then optionally a charging bolt,
+	// then the battery icon to its left.
 	numberX := area.Max.X - labelWidth
 	iconRight := numberX - gap
+	if b.Charging {
+		iconRight -= boltSlot
+	}
 	iconLeft := iconRight - (iconW + notchW)
 	// Sit the icon so its vertical midpoint matches the digits' optical centre.
 	// Atkinson Hyperlegible at 24pt has ~17px of cap height; visual centre of
@@ -109,63 +114,59 @@ func drawBattery(img *image.Gray, area image.Rectangle, b Battery) {
 	}
 
 	if b.Charging {
-		// Simple lightning bolt: a small diamond-ish shape centered on the icon
-		// in white over the fill, so it reads at any battery level.
-		cx := (body.Min.X + body.Max.X) / 2
-		cy := (body.Min.Y + body.Max.Y) / 2
-		drawBolt(img, cx, cy)
+		// Standalone bolt between icon and number, in black over white. Sits
+		// on its own background so it reads at any battery level.
+		boltCX := iconRight + (boltSlot / 2) + 1
+		boltCY := (iconTop + iconBot) / 2
+		drawBolt(img, boltCX, boltCY)
 	}
 
 	drawAt(img, numberFace, label, numberX, area.Max.Y, 0)
 }
 
-// drawBolt paints a small white lightning bolt centered at (cx, cy). It's
-// drawn as two filled triangles meeting at the centre — crude but readable
-// at 600×800.
+// boltMask is a hand-drawn pixel bitmap for the charging indicator. Each '#'
+// is a black pixel; '.' is left transparent. Polygon rasterisation at this
+// scale (~10px wide) was too unreliable — boundary pixels at integer
+// coordinates dropped or doubled unpredictably — so we just draw the shape
+// directly. Tweak the mask freely; drawBolt centres it on (cx, cy).
+var boltMask = []string{
+	".........#",
+	"........##",
+	".......###",
+	"......####",
+	".....####.",
+	"....####..",
+	"...####...",
+	"..####....",
+	".####.....",
+	"##########",
+	".########.",
+	".......###",
+	"......####",
+	".....####.",
+	"....####..",
+	"...####...",
+	"..####....",
+	".####.....",
+	".###......",
+	".##.......",
+	"#.........",
+}
+
+// drawBolt paints the bolt bitmap centred at (cx, cy) in solid black.
 func drawBolt(img *image.Gray, cx, cy int) {
-	white := color.Gray{Y: 255}
-	// Upper-left triangle and lower-right triangle, joined at the middle.
-	// Coordinates relative to centre, then translated.
-	points := [][2]int{
-		{-3, -7}, {2, -7}, {2, -1}, {4, -1}, {-1, 7}, {-1, 1}, {-3, 1},
-	}
-	// Fill the polygon by scanning each row in its bounding box.
-	minX, minY, maxX, maxY := 99, 99, -99, -99
-	for _, p := range points {
-		if p[0] < minX {
-			minX = p[0]
-		}
-		if p[1] < minY {
-			minY = p[1]
-		}
-		if p[0] > maxX {
-			maxX = p[0]
-		}
-		if p[1] > maxY {
-			maxY = p[1]
-		}
-	}
-	for y := minY; y <= maxY; y++ {
-		for x := minX; x <= maxX; x++ {
-			if pointInPolygon(x, y, points) {
-				img.SetGray(cx+x, cy+y, white)
+	black := color.Gray{Y: 0}
+	h := len(boltMask)
+	w := len(boltMask[0])
+	offsetX := cx - w/2
+	offsetY := cy - h/2
+	for y, row := range boltMask {
+		for x := 0; x < len(row); x++ {
+			if row[x] == '#' {
+				img.SetGray(offsetX+x, offsetY+y, black)
 			}
 		}
 	}
-}
-
-func pointInPolygon(x, y int, poly [][2]int) bool {
-	inside := false
-	j := len(poly) - 1
-	for i := range poly {
-		xi, yi := poly[i][0], poly[i][1]
-		xj, yj := poly[j][0], poly[j][1]
-		if ((yi > y) != (yj > y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi) {
-			inside = true
-		}
-		j = i
-	}
-	return inside
 }
 
 func fontMeasure(face font.Face, s string) int {
