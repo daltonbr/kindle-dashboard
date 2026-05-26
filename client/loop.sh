@@ -134,8 +134,17 @@ fi
 # --- fetch helpers ---------------------------------------------------------
 
 fetch_once() {
-    # curl with a tight timeout. Returns non-zero on any failure.
-    curl -fsS --max-time 10 -o "$TMP" "$SERVER_URL"
+    # Build URL with the current battery telemetry as optional query params.
+    # The server treats `batt` as the trigger to render the widget — when
+    # BATT_LEVEL is empty (e.g. lipc-get-prop failed), no params are appended
+    # and the widget doesn't render.
+    url="$SERVER_URL"
+    if [ -n "${BATT_LEVEL:-}" ]; then
+        sep="?"
+        case $url in *\?*) sep="&" ;; esac
+        url="${url}${sep}batt=${BATT_LEVEL}&plug=${BATT_CHARGING:-0}"
+    fi
+    curl -fsS --max-time 10 -o "$TMP" "$url"
 }
 
 fetch_with_poll() {
@@ -179,10 +188,20 @@ draw() {
     fi
 }
 
+read_battery() {
+    # Populate BATT_LEVEL (0-100) and BATT_CHARGING (0/1) from LIPC. Both
+    # may end up empty if the properties aren't available on this firmware
+    # — fetch_once handles that by skipping the query params entirely.
+    BATT_LEVEL=$(lipc-get-prop com.lab126.powerd battLevel 2>/dev/null)
+    BATT_CHARGING=0
+    if [ "$(lipc-get-prop com.lab126.powerd isCharging 2>/dev/null)" = "1" ]; then
+        BATT_CHARGING=1
+    fi
+}
+
 sample_battery() {
-    LEVEL=$(lipc-get-prop com.lab126.powerd battLevel 2>/dev/null)
-    [ -n "$LEVEL" ] || return 0
-    echo "$(date +%s),$LEVEL" >> "$BATTCSV"
+    [ -n "${BATT_LEVEL:-}" ] || return 0
+    echo "$(date +%s),${BATT_LEVEL},${BATT_CHARGING:-0}" >> "$BATTCSV"
 }
 
 # --- main loop -------------------------------------------------------------
@@ -240,6 +259,8 @@ while :; do
     lipc-set-prop com.lab126.cmd wirelessEnable 0 >/dev/null 2>&1 || true
     sleep "$WIRELESS_NUDGE_GAP"
     lipc-set-prop com.lab126.cmd wirelessEnable 1 >/dev/null 2>&1 || true
+
+    read_battery
 
     if fetch_with_poll; then
         if validate_png; then

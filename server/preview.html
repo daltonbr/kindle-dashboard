@@ -7,35 +7,60 @@
   :root { color-scheme: dark; }
   body { font-family: -apple-system, system-ui, sans-serif; background: #1a1a1a; color: #eee; margin: 0; padding: 1rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
   h1 { margin: 0; font-size: 1.1rem; font-weight: 500; opacity: 0.7; }
-  .controls { display: flex; gap: 1rem; align-items: center; font-size: 0.9rem; }
-  .controls input[type=number] { width: 5rem; background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 0.25rem 0.5rem; border-radius: 4px; }
-  .controls button { background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
-  .controls button:hover { background: #333; }
+  .row { display: flex; gap: 1rem; align-items: center; font-size: 0.9rem; flex-wrap: wrap; justify-content: center; }
+  input[type=number] { width: 5rem; }
+  input[type=number], button { background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 0.25rem 0.5rem; border-radius: 4px; }
+  button { padding: 0.4rem 0.8rem; cursor: pointer; }
+  button:hover { background: #333; }
   .status { font-size: 0.8rem; opacity: 0.6; min-height: 1em; }
+  .url { font-family: ui-monospace, monospace; font-size: 0.75rem; opacity: 0.5; word-break: break-all; max-width: 600px; text-align: center; }
   img { background: #fff; border: 1px solid #444; max-width: 100%; height: auto; image-rendering: pixelated; }
+  fieldset { border: 1px solid #333; border-radius: 4px; padding: 0.25rem 0.75rem; }
+  legend { padding: 0 0.4rem; opacity: 0.6; font-size: 0.8rem; }
 </style>
 </head>
 <body>
 <h1>kindle-dashboard · live preview</h1>
-<div class="controls">
+<div class="row">
   <label>refresh every <input id="interval" type="number" value="30" min="1" step="1">s</label>
   <button id="now">refresh now</button>
   <label><input id="auto" type="checkbox" checked> auto</label>
 </div>
+<fieldset class="row">
+  <legend>optional device telemetry</legend>
+  <label>batt <input id="batt" type="number" min="0" max="100" step="1" placeholder="0–100"></label>
+  <label><input id="plug" type="checkbox"> plugged in</label>
+  <button id="clear-telemetry">clear</button>
+</fieldset>
 <img id="img" alt="dashboard" width="600" height="800">
 <div class="status" id="status">loading…</div>
+<div class="url" id="url"></div>
 <script>
 (function () {
   const img = document.getElementById('img');
   const status = document.getElementById('status');
+  const urlEl = document.getElementById('url');
   const intervalInput = document.getElementById('interval');
   const autoCheckbox = document.getElementById('auto');
+  const battInput = document.getElementById('batt');
+  const plugCheckbox = document.getElementById('plug');
   let timer = null;
 
+  function buildURL() {
+    const params = new URLSearchParams();
+    params.set('t', String(Date.now())); // cache-buster
+    if (battInput.value !== '') {
+      params.set('batt', battInput.value);
+      if (plugCheckbox.checked) params.set('plug', '1');
+    }
+    return '/dashboard.png?' + params.toString();
+  }
+
   function refresh() {
-    const t = Date.now();
-    img.src = '/dashboard.png?t=' + t;
-    status.textContent = 'refreshed at ' + new Date(t).toLocaleTimeString();
+    const url = buildURL();
+    img.src = url;
+    status.textContent = 'refreshed at ' + new Date().toLocaleTimeString();
+    urlEl.textContent = url;
   }
 
   function schedule() {
@@ -48,6 +73,13 @@
   intervalInput.addEventListener('change', schedule);
   autoCheckbox.addEventListener('change', schedule);
   document.getElementById('now').addEventListener('click', refresh);
+  battInput.addEventListener('change', refresh);
+  plugCheckbox.addEventListener('change', refresh);
+  document.getElementById('clear-telemetry').addEventListener('click', () => {
+    battInput.value = '';
+    plugCheckbox.checked = false;
+    refresh();
+  });
 
   refresh();
   schedule();

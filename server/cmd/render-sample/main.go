@@ -31,7 +31,8 @@ func main() {
 		FetchedAt: now,
 	}
 
-	img := render.Dashboard(600, 800, now, f)
+	batt := &render.Battery{Level: 53, Charging: true}
+	img := render.Dashboard(600, 800, now, f, batt)
 
 	const path = "/tmp/sample.png"
 	out, err := os.Create(path)

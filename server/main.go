@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -105,13 +106,42 @@ func makeDashboardHandler(cache *weather.Cache) http.HandlerFunc {
 			forecast = &fc
 		}
 
-		img := render.Dashboard(panelWidth, panelHeight, time.Now(), forecast)
+		batt := parseBattery(r.URL.Query())
+
+		img := render.Dashboard(panelWidth, panelHeight, time.Now(), forecast, batt)
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
 		if err := png.Encode(w, img); err != nil {
 			slog.Error("png encode", "err", err)
 		}
 	}
+}
+
+// parseBattery extracts the optional battery widget params from the
+// query string. Returns nil when `batt` is absent or malformed, so the
+// renderer skips the widget entirely.
+//
+//	?batt=53        → Battery{Level: 53, Charging: false}
+//	?batt=53&plug=1 → Battery{Level: 53, Charging: true}
+//
+// `plug` accepts 1/0, true/false (case-insensitive); anything else is false.
+func parseBattery(q map[string][]string) *render.Battery {
+	raw, ok := q["batt"]
+	if !ok || len(raw) == 0 || raw[0] == "" {
+		return nil
+	}
+	level, err := strconv.Atoi(raw[0])
+	if err != nil {
+		return nil
+	}
+	charging := false
+	if p := q["plug"]; len(p) > 0 {
+		switch strings.ToLower(p[0]) {
+		case "1", "true", "yes", "on":
+			charging = true
+		}
+	}
+	return &render.Battery{Level: level, Charging: charging}
 }
 
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
