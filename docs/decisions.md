@@ -191,8 +191,9 @@ If we ever need release semantics (semver tags), we can add a `v*` tag trigger t
 
 **Decision:** The dashboard runs as a long-running daemon that suspends the
 device between refreshes using a sysfs RTC wakealarm. The cron-driven
-`refresh.sh` model is retired in favour of this daemon. Implementation lands
-in M4.x; the architecture and the per-API findings that justify it are in
+`refresh.sh` model is retired in favour of this daemon. Implemented in M4.2 as
+[`client/loop.sh`](../client/loop.sh) and [`client/watchdog.sh`](../client/watchdog.sh);
+the architecture and the per-API findings that justify it are in
 [recon 2026-05-25-wake-investigation](recon/2026-05-25-wake-investigation.md).
 
 **Sketch (see recon for full detail):**
@@ -237,6 +238,19 @@ loop:
 - Removing the daemon's cron entry (`@reboot`) stops it from auto-starting.
 - linkss screensaver publish stays in `refresh.sh` as a safety net for the
   fallback case where the daemon is off and the stock framework is active.
+
+**Implementation notes (added in M4.2):**
+
+- **Single-instance guard** combines a pidfile check with a `/proc` cmdline
+  scan. The pidfile alone is insufficient because signals (TERM/KILL) sent to
+  the daemon while it is blocked in `echo mem > /sys/power/state` are masked
+  by the kernel — a manual `kill` followed by `rm` on the pidfile and a
+  fresh launch produced two concurrent daemons during M4.2 deploy. The
+  cmdline scan catches that case.
+- **Maintenance mode** via a flag file (`state/maintenance`). When present,
+  the loop polls every 30s instead of suspending, so the operator can ssh in
+  to edit configs/scripts/cron without racing the sleeper. Without this, a
+  5-minute suspend window forces a hard tap-to-wake to recover ssh access.
 
 **Rejected alternatives:**
 

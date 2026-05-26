@@ -107,15 +107,18 @@ Recon outcomes:
 - [x] Identified prerequisites: `stop framework` + `stop lab126_gui` (eliminates `cvm` JIT crashes that otherwise abort suspends), and a `wirelessEnable 0/1` LIPC nudge after each wake (without the framework, Wi-Fi doesn't reassociate on its own).
 - [x] Confirmed `scaling_governor=powersave` (396 MHz) sticks across resume.
 
-### M4.2 — Implement the sleep+wake daemon
+### M4.2 — Implement the sleep+wake daemon ✅
 
-- [ ] New `client/loop.sh` running the prelude + loop documented in [D14](decisions.md) / [recon 2026-05-25-wake-investigation](recon/2026-05-25-wake-investigation.md).
-- [ ] PID file at `$ROOT/state/loop.pid` for the watchdog.
-- [ ] Replace per-minute `* * * * *` crontab entry with `@reboot /mnt/us/dashboard/loop.sh` (same `mntroot rw`/`ro` dance as the original install).
-- [ ] Watchdog: `*/5 * * * * /mnt/us/dashboard/watchdog.sh` — relaunches the daemon if its PID is stale.
-- [ ] Default `INTERVAL=300` (5 min) for the first soak. Configurable via `config.env`.
-- [ ] Fast-return guard: if a cycle's `echo mem` returns in `< INTERVAL/2`, sleep the remainder before next iter (defends against unexpected wakeup sources).
-- [ ] Soak: 30 min at 5-min interval, count successful fetches, sample `battLevel` per iter.
+Deployed and validated on 2026-05-26. The daemon ran ~10 hours unattended overnight at INTERVAL=300, ~125 successful cycles, no fast-return cascades, no fetch failures after the first post-wake reassociation completed.
+
+- [x] New [`client/loop.sh`](../client/loop.sh) running the prelude + loop documented in [D14](decisions.md) / [recon 2026-05-25-wake-investigation](recon/2026-05-25-wake-investigation.md).
+- [x] PID file at `$ROOT/state/loop.pid`. Single-instance guard is pidfile + `/proc` cmdline scan (the scan catches orphan daemons whose pidfile got removed while they were blocked in `echo mem`, which masks signals).
+- [x] Replaced per-minute `* * * * *` crontab entry with `@reboot /mnt/us/dashboard/loop.sh`.
+- [x] Watchdog: `*/5 * * * * /mnt/us/dashboard/watchdog.sh` — relaunches the daemon if its PID is stale.
+- [x] Default `INTERVAL=300` (5 min) for the first soak, exposed via `config.env`.
+- [x] Fast-return guard: if a cycle's `echo mem` returns in `< INTERVAL/2`, sleep the remainder before next iter.
+- [x] Maintenance mode: `touch state/maintenance` to make the daemon skip suspend and poll every 30s instead, so an operator can ssh in to edit configs without racing the sleeper.
+- [x] Overnight soak: 10+ hours at 5-min interval, ~125 successful cycles. Battery sampling into `state/batt.csv` working.
 
 ### M4.3 — Interval policy: production cadence + time-of-day awareness
 

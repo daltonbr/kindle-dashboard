@@ -1,6 +1,6 @@
 # Client (Kindle)
 
-The Kindle side of the system: a tiny shell script invoked by busybox `crond`. As of M1, this is live on the device — see [recon 2026-05-25](recon/2026-05-25-first-ssh.md) for the facts that shaped it.
+The Kindle side of the system. Two shell scripts on the device today: `loop.sh` (the M4.2 sleep+wake daemon — the thing actually driving refreshes in production) and `refresh.sh` (the original M1 one-shot, kept for manual smoke tests). See the M4.1 recon notes ([linkss](recon/2026-05-25-linkss.md), [wake investigation](recon/2026-05-25-wake-investigation.md)) and [D14](decisions.md) for why the architecture is shaped this way.
 
 ## On-device layout
 
@@ -8,19 +8,43 @@ All under `/mnt/us/dashboard/` (the user-writable partition; survives reboots, u
 
 ```
 /mnt/us/dashboard/
-  refresh.sh        # the fetch+display script (committed to repo at client/refresh.sh)
-  config.env        # SERVER_URL, LOG_LINES — not in git, lives only on the device
+  loop.sh           # the long-running sleep+wake daemon (committed at client/loop.sh)
+  watchdog.sh       # cron-driven restart-if-dead (committed at client/watchdog.sh)
+  refresh.sh        # original M1 one-shot, kept for manual smoke tests (client/refresh.sh)
+  config.env        # SERVER_URL, LOG_LINES, INTERVAL — not in git, lives only on the device
   state/
     last.png        # most recent successfully fetched image
-    last.log        # script log, auto-trimmed to LOG_LINES on each run
-    crontab.bak     # one-time snapshot of /etc/crontab/root before our edit
+    last.log        # refresh.sh log (legacy, only written if refresh.sh is run manually)
+    loop.log        # loop.sh log, auto-trimmed to LOG_LINES (default 2000)
+    loop.pid        # PID of the running daemon (cleaned up on graceful exit)
+    maintenance     # touch this file to put the daemon in maintenance mode (no suspend)
+    batt.csv        # one row per cycle: epoch,battLevel — produced by loop.sh
+    crontab.bak     # M1 snapshot of /etc/crontab/root
+    crontab.m4.bak  # M4 snapshot, taken before swapping refresh.sh cron for loop.sh
 ```
 
-The cron entry itself lives in **`/etc/crontab/root`** (the system file, owned by busybox `crond` which is already running as PID 893 at boot). Rootfs is read-only by default, so editing this file requires `mntroot rw` / `mntroot ro` bookends.
+The cron entries live in **`/etc/crontab/root`** (the system file, owned by busybox `crond` already running as PID 893 at boot). Rootfs is read-only by default, so editing this file requires `mntroot rw` / `mntroot ro` bookends.
 
-## `refresh.sh`
+## `loop.sh` — the sleep+wake daemon
 
-Lives in this repo at [`../client/refresh.sh`](../client/refresh.sh). Pure `/bin/sh` (busybox), no bash-isms. Key design points:
+Lives in this repo at [`../client/loop.sh`](../client/loop.sh). Long-running. Started by `@reboot` cron (and by `watchdog.sh` if its pidfile goes stale). Architecture in [D14](decisions.md); empirical findings in [recon/2026-05-25-wake-investigation.md](recon/2026-05-25-wake-investigation.md). Key design points:
+
+- **Single-instance guard** that combines a pidfile check and a `/proc` cmdline scan. The scan catches orphan daemons whose pidfile was deleted (e.g., after a `kill -TERM` that was masked while the script was blocked in `echo mem > /sys/power/state`).
+- **Prelude (once at boot):** `stop framework`, `stop lab126_gui`, `scaling_governor=powersave`, `echo enabled > rtc1/device/power/wakeup`. Without `stop framework`, `cvm` JIT crashes register wakeup events that abort every subsequent suspend.
+- **Main loop:** arm `rtc1/wakealarm` → `echo mem > /sys/power/state` → on resume, LIPC wireless nudge (`wirelessEnable 0; sleep 2; wirelessEnable 1`) → poll-curl up to 20s → PNG magic check → `eips -g` → screensaver copy → battery sample to `batt.csv` → log trim → fast-return guard.
+- **Fast-return guard:** if a cycle finishes in less than `INTERVAL/2` (typical cause: a USB plug or user tap waking us early), sleep the remainder before re-entering suspend. Defends against hot-spinning on stray wakeup sources.
+- **Maintenance mode:** while `state/maintenance` exists, the loop polls every 30s instead of suspending. Lets the operator ssh in, edit configs, watch logs, etc. without racing the sleeper. `touch state/maintenance` to enter; `rm state/maintenance` to leave.
+- **Fallback paths:** if `/sys/power/state` or the RTC's `wakealarm` aren't writable for any reason, the loop falls back to a userspace `sleep` so it still makes progress on dry-runs or off-device tests.
+
+## `watchdog.sh`
+
+Lives at [`../client/watchdog.sh`](../client/watchdog.sh). Run from cron every 5 minutes. Reads `state/loop.pid`, checks `/proc/$PID`; if alive, exits silently. If stale or missing, spawns a fresh `loop.sh` via `setsid` so it survives cron's exit.
+
+Cron is suspended along with the kernel, so this only ever fires while the device is awake — i.e., right after a `loop.sh` wake. In the common case the pid is fresh and the watchdog exits in milliseconds.
+
+## `refresh.sh` (legacy)
+
+Lives in this repo at [`../client/refresh.sh`](../client/refresh.sh). Pure `/bin/sh` (busybox), no bash-isms. **No longer driven by cron** as of M4.2 — `loop.sh` replaced it. Kept on the device for manual smoke tests (`ssh kindle /mnt/us/dashboard/refresh.sh`). Key design points:
 
 - **`PATH=/usr/sbin:/usr/bin:/bin`** at the top. The non-interactive shell crond spawns only has `/usr/bin:/bin` by default, and `eips` / `mntroot` live in `/usr/sbin`.
 - **Silent failure** on network/server errors. eink retains the last frame with no power, so a failed refresh is invisible to the family in the living room. We `exit 0` from cron's perspective so it doesn't queue up failure mail.
@@ -30,50 +54,69 @@ Lives in this repo at [`../client/refresh.sh`](../client/refresh.sh). Pure `/bin
 - **Screensaver publish** (M4.1 safety net): after a successful draw, the same PNG is copied to `/mnt/us/linkss/screensavers/bg_ss00.png`. With the M4.x sleep+wake daemon (the real solution, see [D14](decisions.md)) the stock framework is stopped and the screensaver pipeline is never engaged — this copy only matters if the daemon is off and the stock UI is back. Set `SCREENSAVER_PNG=""` to disable.
 - All paths (`ROOT`) and the server URL are env-overridable so the same script handles smoke-testing without touching the production install.
 
-## Cron entry
-
-Current dev cadence — every minute:
+## Cron entries
 
 ```
-* * * * * /mnt/us/dashboard/refresh.sh
+@reboot     /mnt/us/dashboard/loop.sh
+*/5 * * * * /mnt/us/dashboard/watchdog.sh
 ```
 
-Production target: `*/15 * * * *`.
+`@reboot` brings the daemon up at boot; the watchdog catches the rare case of `loop.sh` exiting (manual kill, unexpected crash) without a reboot. The per-minute `refresh.sh` entry from M1 is gone — `loop.sh` is the only thing driving refreshes now.
 
 busybox `crond` watches `/etc/crontab/root` and **auto-reloads on file change** — no SIGHUP or restart needed when we edit it. Confirmed on this device.
+
+## Maintenance mode
+
+Working on the device by hand (editing configs, tailing logs, swapping scripts) without racing the sleeper:
+
+```sh
+ssh kindle 'touch /mnt/us/dashboard/state/maintenance'
+# Daemon enters maintenance mode within one iteration. Device stays awake,
+# Wi-Fi stays up, dashboard still refreshes every 30s.
+
+# ...do work...
+
+ssh kindle 'rm /mnt/us/dashboard/state/maintenance'
+# Next iteration goes back to normal suspend cycles.
+```
 
 ## Install procedure (one-time, on a fresh jailbroken Kindle)
 
 The whole sequence, run from your host. Replace `<server>` with the dashboard server URL.
 
 ```sh
-# 1. Copy script into place (rootfs partition under /mnt/us/ is always writable).
-scp client/refresh.sh kindle:/mnt/us/dashboard/refresh.sh
+# 1. Copy both scripts into place (rootfs partition under /mnt/us/ is always writable).
+scp client/loop.sh client/watchdog.sh client/refresh.sh kindle:/mnt/us/dashboard/
 
 # 2. Drop a config (do not commit this file; it pins the server to your LAN).
 ssh kindle 'cat > /mnt/us/dashboard/config.env <<EOF
 SERVER_URL=http://<server>/dashboard.png
-LOG_LINES=500
+LOG_LINES=2000
+INTERVAL=300
 EOF
-chmod 755 /mnt/us/dashboard/refresh.sh'
+chmod 755 /mnt/us/dashboard/*.sh'
 
-# 3. Sanity-check by running it once manually.
+# 3. Sanity-check refresh.sh once manually (validates server URL + PNG path).
 ssh kindle '/mnt/us/dashboard/refresh.sh && tail -3 /mnt/us/dashboard/state/last.log'
 
-# 4. Install the cron entry. This is the only step that touches rootfs.
+# 4. Install the cron entries. This is the only step that touches rootfs.
 ssh kindle '
   export PATH=/usr/sbin:/usr/bin:/bin
   mntroot rw
-  cp /etc/crontab/root /mnt/us/dashboard/state/crontab.bak    # always back up first
+  cp /etc/crontab/root /mnt/us/dashboard/state/crontab.m4.bak   # always back up first
   cp /etc/crontab/root /tmp/crontab.new
-  echo "* * * * * /mnt/us/dashboard/refresh.sh" >> /tmp/crontab.new
-  mv /tmp/crontab.new /etc/crontab/root                       # atomic swap
+  echo "@reboot /mnt/us/dashboard/loop.sh"          >> /tmp/crontab.new
+  echo "*/5 * * * * /mnt/us/dashboard/watchdog.sh"  >> /tmp/crontab.new
+  mv /tmp/crontab.new /etc/crontab/root                          # atomic swap
   mntroot ro
   tail -3 /etc/crontab/root
 '
 
-# 5. Wait ~70s and confirm cron fired it.
-ssh kindle 'sleep 75; tail -3 /mnt/us/dashboard/state/last.log'
+# 5. Launch the daemon now (so we do not need a reboot to start the soak).
+ssh kindle 'setsid /mnt/us/dashboard/loop.sh </dev/null >/dev/null 2>&1 &'
+
+# 6. Confirm the first cycle.
+ssh kindle 'sleep 6; cat /mnt/us/dashboard/state/loop.pid; tail -10 /mnt/us/dashboard/state/loop.log'
 ```
 
 ### Why each step is shaped that way
@@ -86,19 +129,29 @@ ssh kindle 'sleep 75; tail -3 /mnt/us/dashboard/state/last.log'
 ## Rollback (uninstall)
 
 ```sh
+# 1. Stop the daemon (use kill -9 — a plain TERM may be masked if the
+#    process is blocked in `echo mem > /sys/power/state`).
+ssh kindle 'kill -9 $(cat /mnt/us/dashboard/state/loop.pid) 2>/dev/null; rm -f /mnt/us/dashboard/state/loop.pid /mnt/us/dashboard/state/maintenance'
+
+# 2. Restore stock cron (use the M4 backup; an even older M1 backup may also exist).
 ssh kindle '
   export PATH=/usr/sbin:/usr/bin:/bin
   mntroot rw
-  cp /mnt/us/dashboard/state/crontab.bak /etc/crontab/root
+  cp /mnt/us/dashboard/state/crontab.m4.bak /etc/crontab/root
   mntroot ro
 '
-ssh kindle 'rm -rf /mnt/us/dashboard'   # optional — wipes script, config, state
+
+# 3. Bring framework back up so the device is usable as a Kindle again.
+ssh kindle 'start framework; start lab126_gui'
+
+# 4. Optional — wipe scripts, config, state entirely.
+ssh kindle 'rm -rf /mnt/us/dashboard'
 ```
 
-## Open items (deferred to post-M2)
+A reboot also restores stock behaviour (framework comes back, daemon does not auto-start once `@reboot loop.sh` is removed). The CPU governor reverts to `ondemand` on reboot.
 
-- Confirm cron survives a Kindle reboot. The crontab is in rootfs and should — but untested.
-- ~~Reader UI / lock-screen overlay suppression. Leading candidate is the `linkss` screensaver pipeline.~~ Done in M4.1 via screensaver publish — see [recon 2026-05-25-linkss](recon/2026-05-25-linkss.md).
-- Battery / wake-from-sleep behavior under cron-driven refresh.
+## Open items
 
-These do not block server work and are best decided once we have a real dashboard image to test sleep behavior against.
+- ~~Confirm cron survives a Kindle reboot.~~ Roadmap M4.5 — verifies `@reboot /mnt/us/dashboard/loop.sh` actually fires.
+- ~~Reader UI / lock-screen overlay suppression.~~ Done in M4.2 by stopping the framework outright in `loop.sh`'s prelude.
+- ~~Battery / wake-from-sleep behavior under cron-driven refresh.~~ Roadmap M4.6 — `loop.sh` already samples `battLevel` per cycle into `state/batt.csv`.
