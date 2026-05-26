@@ -130,10 +130,13 @@ Deployed and validated on 2026-05-26. The daemon ran ~10 hours unattended overni
 - [ ] If the operator's compose includes a `HEALTHCHECK`, ensure `GET /healthz` works from inside the container with no shell (currently fine — Go binary itself is the only thing in the image; HEALTHCHECK needs to use the binary or be docker's `CMD-SHELL` with `wget`/`curl` *inside* — neither exists in `FROM scratch`). Options: add a `/healthz` hint command in the binary itself (`./server healthcheck`), or accept that the host-side healthcheck is the only viable place.
 - [ ] Document the choice.
 
-### M4.5 — Daemon survival across reboots
+### M4.5 — Daemon survival across reboots ✅
 
-- [ ] Reboot the Kindle (long-press power → restart). Verify the `@reboot` daemon entry in `/etc/crontab/root` survives, the daemon comes up, and a refresh fires within `INTERVAL` of boot.
-- [ ] Watchdog kicks the daemon if the PID is stale (already in M4.2).
+Tested on 2026-05-26 via `ssh kindle /sbin/reboot`. The daemon **does** survive a reboot, but not via the path we expected:
+
+- **`@reboot /mnt/us/dashboard/loop.sh` is silently ignored** by busybox crond on this firmware. crond comes up at boot (verified — PID 853), reads `/etc/crontab/root`, but never executes the `@reboot` entry. No new "loop.sh starting" log line; no `loop.sh` process in `/proc`.
+- **The watchdog cron fills the gap.** At the next `*/5` tick, `watchdog.sh` sees the stale pidfile (old pre-reboot pid), spawns a fresh daemon. First refresh lands within `INTERVAL` of that — median ~2.5 min after boot, worst case ~5 min. Acceptable for a wall dashboard.
+- **Decision:** kept the `@reboot` line in the crontab as belt-and-braces in case a future firmware honours it; documented the actual recovery path in [client.md](client.md#rebooting-from-the-terminal). Did not invest in switching to a proper init.d / upstart job — reboots are rare and 5 min worst-case outage is fine.
 
 ### M4.6 — Battery / mount
 

@@ -65,6 +65,24 @@ Lives in this repo at [`../client/refresh.sh`](../client/refresh.sh). Pure `/bin
 
 busybox `crond` watches `/etc/crontab/root` and **auto-reloads on file change** — no SIGHUP or restart needed when we edit it. Confirmed on this device.
 
+## Rebooting from the terminal
+
+`reboot` lives at `/sbin/reboot` on the Kindle but isn't on the non-login shell's PATH, so a bare `ssh kindle reboot` returns `sh: reboot: not found`. Use the absolute path:
+
+```sh
+ssh kindle '/sbin/reboot'
+```
+
+`/sbin/halt`, `/sbin/poweroff`, and `/sbin/shutdown` all exist with the same caveat. A clean reboot is preferred over a long-press of the physical power button — it exercises the same `@reboot loop.sh` cron path the install procedure relies on, and there's no risk of holding for too long and triggering the firmware reset menu.
+
+After reboot, expect:
+- ssh comes back in roughly 30–60 seconds.
+- The Kindle finishes booting into its stock UI (visible briefly on the panel).
+- The `*/5 * * * * watchdog.sh` cron entry catches the stale pidfile within five minutes and relaunches `loop.sh`.
+- First refresh lands roughly `(time until next */5 tick) + ~10s` after boot — median ~2.5 min, worst case ~5 min.
+
+**`@reboot` is silently ignored on this firmware.** Busybox crond is running and the `@reboot /mnt/us/dashboard/loop.sh` entry is present, but no execution happens on boot. Verified empirically in M4.5: ssh came back at uptime 42s, crond was up (PID 853), the entry was unchanged in `/etc/crontab/root`, but no `loop.sh` process existed and the log had no new starting line. Running the watchdog manually then started the daemon correctly. The `@reboot` entry is kept in the crontab as documentation / belt-and-braces in case a future firmware honours it; the watchdog is the actual recovery mechanism.
+
 ## Maintenance mode
 
 Working on the device by hand (editing configs, tailing logs, swapping scripts) without racing the sleeper:
