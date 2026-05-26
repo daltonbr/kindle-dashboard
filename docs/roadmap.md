@@ -122,8 +122,18 @@ Deployed and validated on 2026-05-26. The daemon ran ~10 hours unattended overni
 
 ### M4.3 — Interval policy: production cadence + time-of-day awareness
 
-- [ ] Bump default `INTERVAL` from soak value (5 min) to production target after the M4.2 soak proves stable. Likely 10–15 min.
+- [x] Bumped `INTERVAL` from soak value (5 min) to 10 min (600s) on 2026-05-26. Daemon (pid 7653) running with the new cadence; first cycle confirmed `cycle … < 600s/2 — sleeping …` in the log.
+- [ ] After ~24h of 10-min cycles, review `state/batt.csv` slope and decide whether to push toward 15 min.
 - [ ] Optional follow-on: schedule-aware interval (faster during morning hours, slower overnight). Defer until we have a use case that benefits from it.
+
+### Open observation window (started 2026-05-26 ~11:11 BST)
+
+Daemon left running unattended at `INTERVAL=600`. When picking this back up, look for:
+
+- **`state/batt.csv` slope** — informs M4.6 (drain rate at the 10-min cadence) and feeds the M4.3 "should we go to 15 min?" decision.
+- **`fetch FAILED` clusters in `state/loop.log`** — Wi-Fi flakiness patterns. Isolated failures are fine (the next cycle picks up), repeated clusters at the same time-of-day might hint at router behaviour.
+- **Orphan-loop or guard-exit log lines** — `another loop.sh is already running` should NOT appear under steady-state operation. If it does, the watchdog and the daemon are racing for some reason.
+- **Ghost-refresh cycles** — every 12 cycles now = every 2h at the new cadence. Should see one of these per ~2h in the log.
 
 ### M4.4 — Healthcheck wiring (server-side)
 
