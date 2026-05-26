@@ -74,19 +74,22 @@ trim_log() {
 # Two checks: the pidfile (cheap, fast path) and a /proc cmdline scan
 # (catches orphan daemons whose pidfile was rm'd, e.g. after a TERM that
 # was masked during `echo mem > /sys/power/state`).
+#
+# The /proc scan matches the script path as argv[1] specifically — not
+# anywhere in the cmdline — so we don't false-positive on shells whose
+# command body happens to mention the script (e.g. a deploy script run
+# via ssh heredoc).
 
 for d in /proc/[0-9]*; do
     [ -d "$d" ] || continue
     other=${d##*/}
     [ "$other" = "$$" ] && continue
-    if [ -r "$d/cmdline" ]; then
-        cmd=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)
-        case $cmd in
-            *"$0"*)
-                log "another loop.sh is already running as pid $other — exiting"
-                exit 0
-                ;;
-        esac
+    [ -r "$d/cmdline" ] || continue
+    # argv[1] is the second null-separated field in /proc/PID/cmdline.
+    other_argv1=$(tr '\0' '\n' < "$d/cmdline" 2>/dev/null | sed -n '2p')
+    if [ "$other_argv1" = "$0" ]; then
+        log "another loop.sh is already running as pid $other — exiting"
+        exit 0
     fi
 done
 
