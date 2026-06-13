@@ -12,8 +12,8 @@ A self-hosted family dashboard for an old jailbroken **Kindle 7th gen** (basic t
 | --- | --- |
 | **M1** — Client pipeline (cron + `refresh.sh` + `eips`) | ✅ done, live on the device |
 | **M2** — Minimal Go server + Dockerfile + CI + GHCR publish | ✅ done, rendering on the panel |
-| **M3** — Weather panel (Open-Meteo) | ⏭ next — broken down in `docs/roadmap.md` |
-| **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | scheduled |
+| **M3** — Weather panel (Open-Meteo) | ✅ done, live on the panel |
+| **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | 🔄 in progress — M4.1/4.2/4.3/4.5 done; M4.4 (healthcheck) + M4.6 (battery/mount) open |
 
 See `docs/roadmap.md` for sub-task breakdowns of M3 and M4.
 

@@ -124,7 +124,7 @@ Deployed and validated on 2026-05-26. The daemon ran ~10 hours unattended overni
 
 - [x] Bumped `INTERVAL` from soak value (5 min) to 10 min (600s) on 2026-05-26. Daemon (pid 7653) running with the new cadence; first cycle confirmed `cycle … < 600s/2 — sleeping …` in the log.
 - [ ] After ~24h of 10-min cycles, review `state/batt.csv` slope and decide whether to push toward 15 min.
-- [ ] Optional follow-on: schedule-aware interval (faster during morning hours, slower overnight). Defer until we have a use case that benefits from it.
+- [x] Schedule-aware interval (2026-06-13): `loop.sh` now picks its interval per-cycle from the wall clock — `INTERVAL` (10 min) by day, `NIGHT_INTERVAL` (1 h) from 00:00–07:00. Config-driven via `NIGHT_INTERVAL`/`NIGHT_START`/`NIGHT_END`; defaults bake in the policy. See [D15](decisions.md#d15--time-of-day-refresh-cadence) and [client.md](client.md#refresh-cadence-and-how-to-tweak-it). **Not yet deployed to the device** — pending an ssh window (device currently suspended).
 
 ### Open observation window (started 2026-05-26 ~11:11 BST)
 
@@ -165,5 +165,6 @@ Pull from this list when M4 is done — don't start in parallel.
 - "Now playing" panel
 - Multiple dashboard layouts selected via query param (`?layout=morning`, etc.)
 - Configuration API the Kindle polls for refresh hints
+- **Flexible refresh agenda** — generalize the two-regime day/night cadence (D15) into an arbitrary schedule: per-hour intervals, multiple windows, or a weekday/weekend split. Deferred 2026-06-13 in favour of shipping the simple two-regime version first and letting `batt.csv` show whether the extra flexibility earns its complexity.
 - Support for additional eink devices at other resolutions
 - Migrate `client/refresh.sh` install to a small `client/install.sh` once we have >1 client artifact

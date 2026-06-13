@@ -11,7 +11,7 @@ All under `/mnt/us/dashboard/` (the user-writable partition; survives reboots, u
   loop.sh           # the long-running sleep+wake daemon (committed at client/loop.sh)
   watchdog.sh       # cron-driven restart-if-dead (committed at client/watchdog.sh)
   refresh.sh        # original M1 one-shot, kept for manual smoke tests (client/refresh.sh)
-  config.env        # SERVER_URL, LOG_LINES, INTERVAL — not in git, lives only on the device
+  config.env        # SERVER_URL, LOG_LINES, INTERVAL, night-cadence knobs — not in git, lives only on the device
   state/
     last.png        # most recent successfully fetched image
     last.log        # refresh.sh log (legacy, only written if refresh.sh is run manually)
@@ -35,6 +35,38 @@ Lives in this repo at [`../client/loop.sh`](../client/loop.sh). Long-running. St
 - **Fast-return guard:** if a cycle finishes in less than `INTERVAL/2` (typical cause: a USB plug or user tap waking us early), sleep the remainder before re-entering suspend. Defends against hot-spinning on stray wakeup sources.
 - **Maintenance mode:** while `state/maintenance` exists, the loop polls every 30s instead of suspending. Lets the operator ssh in, edit configs, watch logs, etc. without racing the sleeper. `touch state/maintenance` to enter; `rm state/maintenance` to leave.
 - **Fallback paths:** if `/sys/power/state` or the RTC's `wakealarm` aren't writable for any reason, the loop falls back to a userspace `sleep` so it still makes progress on dry-runs or off-device tests.
+
+## Refresh cadence (and how to tweak it)
+
+The daemon picks its sleep interval **at the top of every cycle** from the wall clock, so changes take effect on the next wake — no restart needed. Two regimes:
+
+- **Daytime** — `INTERVAL` seconds (default **600** = 10 min).
+- **Overnight** — `NIGHT_INTERVAL` seconds (default **3600** = 1 h) whenever the local hour is inside `[NIGHT_START:00, NIGHT_END:00)`. Defaults `NIGHT_START=0`, `NIGHT_END=7` → midnight to 7am.
+
+All four are env knobs read from `config.env`. The script bakes in the defaults above, so the "10 min by day, hourly 00:00–07:00" policy is active even with no cadence lines in `config.env` at all. To change it, add/edit lines in `/mnt/us/dashboard/config.env` and let the next cycle pick them up (or `touch state/maintenance`, edit, `rm` it to apply within ~30s):
+
+```sh
+INTERVAL=900          # daytime: 15 min instead of 10
+NIGHT_INTERVAL=1800   # overnight: half-hourly instead of hourly
+NIGHT_START=23        # window may wrap past midnight (e.g. 23..7)
+NIGHT_END=6           # back to daytime cadence at 06:00
+```
+
+Notes:
+
+- **Disable the night slowdown:** set `NIGHT_INTERVAL` equal to `INTERVAL`, or `NIGHT_START` equal to `NIGHT_END`.
+- **Wrap-around windows work:** if `NIGHT_START > NIGHT_END` (e.g. `22..7`) the window spans midnight.
+- **Boundary overshoot is intentional and harmless:** the interval is chosen when the alarm is armed, so a cycle that arms at 06:30 with the default hourly night cadence sleeps until 07:30 — i.e. the switch back to daytime cadence can lag the `NIGHT_END` hour by up to one `NIGHT_INTERVAL`. Not worth clamping for a wall dashboard.
+- **Ghost-refresh is cycle-counted, not time-based** (`GHOST_REFRESH_EVERY`, default 12). Overnight at hourly cycles those 12 cycles stretch across the whole night, so the full-flash de-ghost effectively pauses until morning — fine, since nothing's ghosting on a screen nobody's reading.
+- **Each armed interval is logged** (`armed wakealarm for <N>s`), so `tail state/loop.log` shows the regime the daemon is actually in.
+
+### Reaching the device while it's on a long overnight interval
+
+Suspend means **Wi-Fi off and ssh unreachable** for the whole interval — so on the hourly night cadence the device is only ssh-reachable for the ~10–20s awake window once an hour (worst case ~1h wait). Ways in:
+
+- **Physically wake it** (USB plug/unplug or a tap/power-button press is a wakeup source). The daemon resumes, brings Wi-Fi up, and runs its cycle; if it was woken in the first half of the interval, the **fast-return guard** then holds the device *awake* (userspace `sleep`, not suspend) for the remainder — which is exactly when ssh works. So a tap early in a night hour buys you a long ssh window.
+- **Maintenance mode** is the deliberate "stay awake so I can work" switch (`touch state/maintenance`), but it requires ssh access to set — so reach for the physical wake first, then drop into maintenance mode to hold the device open.
+- A clean **reboot** (`ssh kindle '/sbin/reboot'`, once you have a window) brings the framework back and the watchdog relaunches the daemon within ~5 min.
 
 ## `watchdog.sh`
 
@@ -110,7 +142,11 @@ scp client/loop.sh client/watchdog.sh client/refresh.sh kindle:/mnt/us/dashboard
 ssh kindle 'cat > /mnt/us/dashboard/config.env <<EOF
 SERVER_URL=http://<server>/dashboard.png
 LOG_LINES=2000
-INTERVAL=300
+INTERVAL=600
+# Optional cadence knobs (defaults shown — omit to accept them):
+#   NIGHT_INTERVAL=3600   # overnight refresh interval (1h)
+#   NIGHT_START=0         # overnight window start hour (local)
+#   NIGHT_END=7           # overnight window end hour (local, exclusive)
 EOF
 chmod 755 /mnt/us/dashboard/*.sh'
 

@@ -270,3 +270,54 @@ loop:
 practice; we want sub-5-minute refresh cadence (the overhead becomes a
 larger fraction of the cycle); or we need a different wake source (calendar
 events, push notifications) than fixed-interval polling.
+
+---
+
+## D15 — Time-of-day refresh cadence
+
+**Decision:** `loop.sh` chooses its sleep interval per-cycle from the local
+wall clock: `INTERVAL` (default 600s / 10 min) by day, `NIGHT_INTERVAL`
+(default 3600s / 1 h) when the local hour is in `[NIGHT_START, NIGHT_END)`
+(default `0..7`, i.e. midnight–7am). All four are `config.env` env knobs;
+the script's built-in defaults already implement the policy with no config
+present. Closes the M4.3 "schedule-aware interval" follow-on.
+
+**Why:**
+
+- **Battery, for free.** Nobody reads a living-room wall dashboard at 03:00.
+  Dropping from 6 wakes/hour to 1 across a 7-hour window removes ~35
+  wake/Wi-Fi-reassociate/fetch cycles per night — the most expensive part of
+  each cycle is the post-resume Wi-Fi reassociation, not the suspend itself.
+- **The daemon already knows the time.** It's awake and running `date` at the
+  moment it arms the next alarm, so picking the interval there is a couple of
+  lines — no new wake source, no scheduler, no server involvement.
+- **Recompute-per-cycle over compute-once.** Reading the clock every cycle
+  means a `config.env` edit or the day/night boundary is honoured on the next
+  wake without restarting the daemon. The cost is one `date` call per cycle —
+  negligible.
+
+**Trade-offs accepted:**
+
+- **Boundary overshoot.** The interval is fixed when the alarm is armed, so
+  the morning switch back to daytime cadence can lag `NIGHT_END` by up to one
+  `NIGHT_INTERVAL` (arm at 06:30 → next wake 07:30). Not worth clamping for a
+  wall display.
+- **Coarser overnight ssh access.** During an hourly night cycle the device
+  is ssh-reachable only in the ~10–20s awake window once an hour. Mitigated by
+  physical wake + the fast-return guard's awake-remainder window, and by
+  maintenance mode. Documented in [client.md](client.md#refresh-cadence-and-how-to-tweak-it).
+- **Ghost-refresh pauses overnight.** `GHOST_REFRESH_EVERY` counts cycles, not
+  wall-time, so the periodic full-flash de-ghost effectively stops until
+  morning. Acceptable — nothing ghosts on a screen nobody's looking at.
+
+**Rejected alternatives:**
+
+- **Server-driven cadence** (Kindle polls a `?next=` hint). More moving parts,
+  couples client cadence to server availability, and the client already has
+  the only input it needs (the clock). Kept on the post-M4 idea list.
+- **Sunrise/sunset-aware window** via the Open-Meteo data we already fetch.
+  Cute, but a fixed clock window is what the user asked for and is trivially
+  predictable. Revisit if a fixed window proves annoying around solstices.
+
+**Revisit when:** we want more than two regimes (e.g. a faster morning burst),
+a weekday/weekend split, or sunrise-relative timing.

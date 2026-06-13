@@ -25,7 +25,32 @@ export PATH
 
 : "${SERVER_URL:=http://CHANGE-ME:PORT/dashboard.png}"
 : "${LOG_LINES:=2000}"
-: "${INTERVAL:=300}"
+
+# Daytime refresh interval, in seconds. This is the knob you'll most often
+# want to tweak (e.g. 600 -> 900 to trade freshness for battery). Overridable
+# in config.env.
+: "${INTERVAL:=600}"
+
+# --- time-of-day interval policy -------------------------------------------
+#
+# Between NIGHT_START:00 and NIGHT_END:00 (local wall-clock, exclusive of the
+# end hour) the daemon refreshes every NIGHT_INTERVAL seconds instead of
+# INTERVAL. Nobody's looking at a wall dashboard at 03:00, so we trade
+# freshness for battery overnight. The interval is recomputed at the top of
+# every cycle, so a change to config.env takes effect on the next wake.
+#
+# Defaults below implement "10 min by day, once an hour from midnight to 7am".
+# To tweak later, set any of these in /mnt/us/dashboard/config.env:
+#   INTERVAL=900            # slower daytime cadence (15 min)
+#   NIGHT_INTERVAL=1800     # half-hourly overnight instead of hourly
+#   NIGHT_START=23          # window may wrap past midnight, e.g. 23..7
+#   NIGHT_END=6             # wake back to daytime cadence at 06:00
+# To DISABLE the night slowdown entirely, set NIGHT_INTERVAL equal to INTERVAL
+# (or NIGHT_START equal to NIGHT_END).
+: "${NIGHT_INTERVAL:=3600}"
+: "${NIGHT_START:=0}"
+: "${NIGHT_END:=7}"
+
 : "${SCREENSAVER_PNG:=/mnt/us/linkss/screensavers/bg_ss00.png}"
 
 # Every Nth refresh cycle, use `eips -f -g` (full flashing waveform) instead
@@ -106,7 +131,7 @@ trap cleanup EXIT INT TERM
 # each is needed. Errors are logged but not fatal; the loop can survive a
 # partial prelude (e.g. governor write failing) better than no daemon at all.
 
-log "loop.sh starting (pid=$$, interval=${INTERVAL}s, ghost-refresh-every=${GHOST_REFRESH_EVERY})"
+log "loop.sh starting (pid=$$, interval=${INTERVAL}s, night-interval=${NIGHT_INTERVAL}s in [${NIGHT_START}:00,${NIGHT_END}:00), ghost-refresh-every=${GHOST_REFRESH_EVERY})"
 
 # Counter used by the ghost-refresh policy. Starts at 1 so the first cycle
 # (cycle_count == 1) does a partial refresh; the first full flash is on
@@ -204,6 +229,33 @@ sample_battery() {
     echo "$(date +%s),${BATT_LEVEL},${BATT_CHARGING:-0}" >> "$BATTCSV"
 }
 
+# --- time-of-day interval ---------------------------------------------------
+
+in_night_window() {
+    # $1 = current hour as an integer 0-23. Returns 0 (true) if that hour is
+    # inside the overnight window. Handles a window that wraps past midnight
+    # (NIGHT_START > NIGHT_END, e.g. 23..7) as well as the simple case.
+    h=$1
+    if [ "$NIGHT_START" -le "$NIGHT_END" ]; then
+        [ "$h" -ge "$NIGHT_START" ] && [ "$h" -lt "$NIGHT_END" ]
+    else
+        [ "$h" -ge "$NIGHT_START" ] || [ "$h" -lt "$NIGHT_END" ]
+    fi
+}
+
+current_interval() {
+    # %H is zero-padded ("03", "09"); strip the leading zero so busybox sh
+    # arithmetic/comparison doesn't choke on "08"/"09" as invalid octal.
+    hour=$(date +%H)
+    hour=${hour#0}
+    : "${hour:=0}"
+    if in_night_window "$hour"; then
+        echo "$NIGHT_INTERVAL"
+    else
+        echo "$INTERVAL"
+    fi
+}
+
 # --- main loop -------------------------------------------------------------
 
 while :; do
@@ -231,14 +283,20 @@ while :; do
         continue
     fi
 
+    # Pick this cycle's interval from the wall clock (daytime vs overnight).
+    # Computed fresh every cycle so a config.env edit or the day/night
+    # boundary is picked up on the next wake without restarting the daemon.
+    interval=$(current_interval)
+
     # Arm the RTC alarm. Clear-then-set is the kernel's documented pattern.
     if [ -w "$RTC/wakealarm" ]; then
         echo 0 > "$RTC/wakealarm" 2>/dev/null || true
-        echo $(( cycle_start + INTERVAL )) > "$RTC/wakealarm" 2>/dev/null \
+        echo $(( cycle_start + interval )) > "$RTC/wakealarm" 2>/dev/null \
             || log "wakealarm: failed to arm"
+        log "armed wakealarm for ${interval}s"
     else
         log "wakealarm: $RTC/wakealarm not writable — sleeping with plain sleep"
-        sleep "$INTERVAL"
+        sleep "$interval"
     fi
 
     # Suspend. Blocks until the alarm (or USB plug, or other wakeup source)
@@ -247,9 +305,9 @@ while :; do
     # progress.
     if [ -w /sys/power/state ]; then
         echo mem > /sys/power/state 2>/dev/null \
-            || { log "suspend failed; sleeping ${INTERVAL}s in userspace"; sleep "$INTERVAL"; }
+            || { log "suspend failed; sleeping ${interval}s in userspace"; sleep "$interval"; }
     else
-        sleep "$INTERVAL"
+        sleep "$interval"
     fi
 
     wake_at=$(date +%s)
@@ -283,9 +341,9 @@ while :; do
     # hot spin. Sleep the remainder of the nominal interval first.
     cycle_end=$(date +%s)
     cycle_len=$(( cycle_end - cycle_start ))
-    if [ "$cycle_len" -lt $(( INTERVAL / 2 )) ]; then
-        remainder=$(( INTERVAL - cycle_len ))
-        log "fast-return guard: cycle ${cycle_len}s < ${INTERVAL}s/2 — sleeping ${remainder}s"
+    if [ "$cycle_len" -lt $(( interval / 2 )) ]; then
+        remainder=$(( interval - cycle_len ))
+        log "fast-return guard: cycle ${cycle_len}s < ${interval}s/2 — sleeping ${remainder}s"
         sleep "$remainder"
     fi
 done
