@@ -50,6 +50,16 @@ M3 will add `internal/weather/` (Open-Meteo client + TTL cache) and embedded TTF
 
 > **Operator TODO:** expose `WEATHER_LAT` / `WEATHER_LON` / `WEATHER_TTL` as variables in the deployment config so they can be tuned without rebuilding the image. Currently relying on the image's built-in Brighton defaults.
 
+### Secret hygiene & config (public repo)
+
+The repo is public. The rule (see [D16](decisions.md#d16--widget-data-layer-in-repo-providers-secrets-via-env)): **code is public; secrets and personal identifiers are not.** From M5 onward, providers may need API keys/tokens (e.g. OpenWeatherMap, Home Assistant, Google Calendar) and personal IDs (calendar IDs, HA entity IDs/URL, exact coords).
+
+- **Secrets and personal config come from the environment only** — env vars or a host-only mounted file. Never committed; never baked into the image (it stays `FROM scratch`, binary only — secrets enter at `docker run` time via `--env-file`).
+- **This doc lists vars with placeholder values only.** Never paste a real key/token/ID here.
+- **Providers are inert without config** — a provider whose env vars are unset returns an error (the widget renders "unavailable") or falls back to a `Demo*` source. A clone of the repo with no config does nothing private, and CI/forks run clean.
+- **Guards:** enable GitHub secret scanning + push protection (free on public repos) in repo settings; add a `gitleaks` CI step / pre-commit hook before the first private provider (roadmap M5.5).
+- Privacy is **not** the security mechanism — these practices apply whether or not the repo is public.
+
 ## Endpoints
 
 | Method | Path | Returns |
@@ -118,7 +128,7 @@ The image is intentionally vanilla so any container orchestrator can run it. The
 - Listens on `${PORT:=8080}` inside the container.
 - Healthcheck: `GET /healthz`.
 - Suggested restart policy: `unless-stopped` (it's a wall-mounted backend, restart on host reboot is desirable).
-- No secrets needed for M2. M3 will not need them either (Open-Meteo is keyless).
+- No secrets needed through M4 (Open-Meteo is keyless). M5 providers may need keys/tokens — injected via env / a host-only `--env-file`, never in the image. See [Secret hygiene & config](#secret-hygiene--config-public-repo).
 
 ### Deploy recipes
 

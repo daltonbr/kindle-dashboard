@@ -156,6 +156,19 @@ Tested on 2026-05-26 via `ssh kindle /sbin/reboot`. The daemon **does** survive 
 
 ---
 
+## M5 — Composable widgets
+
+Full design + rationale in [widgets.md](widgets.md); separation/safety decision in [D16](decisions.md#d16--widget-data-layer-in-repo-providers-secrets-via-env). Move from one hard-coded layout to small widgets on a **2×2 grid + spans** (portrait default, landscape supported), with a typed **data layer** behind per-domain provider interfaces. Integration code stays in this public repo; secrets + personal config live only in the deployment env. Native iOS/macOS widgets are a **non-goal**. Single static layout for now.
+
+- [ ] **M5.0** — Widget seam refactor from `panels.Weather`, no behaviour change (golden test asserts identical PNG).
+- [ ] **M5.1** — 2×2 grid + orientation (footprint→rect math, `?orientation=landscape`, portrait default).
+- [ ] **M5.2** — Data layer + `DemoWeather` provider (widget renders with zero network).
+- [ ] **M5.3** — Real weather provider behind the seam (Open-Meteo; optional OpenWeatherMap via env key).
+- [ ] **M5.4** — Second widget to exercise composition (clock/date or placeholder).
+- [ ] **M5.5** — (deferred) First private source (Calendar or Home Assistant); add `gitleaks` CI guard first.
+
+---
+
 ## Post-M4 ideas (not committed)
 
 Pull from this list when M4 is done — don't start in parallel.

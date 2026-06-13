@@ -321,3 +321,48 @@ present. Closes the M4.3 "schedule-aware interval" follow-on.
 
 **Revisit when:** we want more than two regimes (e.g. a faster morning burst),
 a weekday/weekend split, or sunrise-relative timing.
+
+---
+
+## D16 — Widget data layer: in-repo providers, secrets via env
+
+**Decision:** The M5 widget architecture keeps all data-source integration code
+**in this (public) repo**, behind per-domain provider interfaces
+(`WeatherProvider`, later `CalendarProvider`, `HomeAssistantProvider`). Secrets
+(API keys, tokens) and personal identifiers (calendar IDs, HA entity IDs/URL,
+exact coords) live **only in the deployment environment** (env vars / a
+host-only file), never in git and never in the image. No separate "data
+sidecar" service and no private Go module. Full design in
+[widgets.md](widgets.md).
+
+**Why:**
+
+- **Public repos are safe when they contain no secret material.** Security comes
+  from externalised config, not from hiding code. The client already follows
+  this (`config.env` is gitignored, lives only on the device); we extend the
+  same discipline to the server.
+- **Simplest thing that meets the constraints.** With native iOS/macOS widgets
+  dropped as a goal (the main driver for a shared JSON data layer), a sidecar's
+  second service + JSON contract buys nothing here. In-repo interfaces + env
+  config is less to build, deploy, and version.
+- **The interface seam is the part that actually matters.** A widget renders
+  from a typed model and never knows the source; providers are swappable
+  (`Demo*` for tests, real impls in prod). That decoupling — not the physical
+  location of the code — is what enables modular widget development.
+
+**Safety practices (required for any provider that needs a secret):**
+
+- Secret/personal config via env or a mounted file only; documented in
+  [server.md](server.md#secret-hygiene--config-public-repo) with placeholder
+  values exclusively.
+- Providers are **inert without config** — return an error (widget shows
+  "unavailable") or fall back to their `Demo*` sibling. A clone with no config
+  does nothing private and CI/forks run clean.
+- The GHCR image stays secret-free (`FROM scratch`, binary only); secrets enter
+  at `docker run` time (`--env-file` on the host).
+- Enable GitHub secret scanning + push protection (free on public repos); add a
+  `gitleaks` CI step / pre-commit hook before the first private source (M5.5).
+
+**Revisit when:** native iOS/macOS widgets become a real goal (→ reconsider the
+sidecar/JSON data layer), or a provider needs config too rich/personal to keep
+comfortably in env (→ reconsider going private).

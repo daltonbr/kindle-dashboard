@@ -14,8 +14,9 @@ A self-hosted family dashboard for an old jailbroken **Kindle 7th gen** (basic t
 | **M2** — Minimal Go server + Dockerfile + CI + GHCR publish | ✅ done, rendering on the panel |
 | **M3** — Weather panel (Open-Meteo) | ✅ done, live on the panel |
 | **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | 🔄 in progress — M4.1/4.2/4.3/4.5 done; M4.4 (healthcheck) + M4.6 (battery/mount) open |
+| **M5** — Composable widgets (2×2 grid, data-layer providers) | 📐 planned — design in `docs/widgets.md`, decision [D16] |
 
-See `docs/roadmap.md` for sub-task breakdowns of M3 and M4.
+See `docs/roadmap.md` for sub-task breakdowns, and `docs/widgets.md` for the M5 widget architecture.
 
 ## Repo layout
 
@@ -38,8 +39,9 @@ See `docs/roadmap.md` for sub-task breakdowns of M3 and M4.
 │   ├── architecture.md      # system shape + linkss alt path
 │   ├── client.md            # install procedure + cron + rollback
 │   ├── server.md            # endpoints, env vars, deploy contract
-│   ├── decisions.md         # D1-D11 ADR-style decision log
-│   ├── roadmap.md           # M0-M4 with sub-tasks
+│   ├── decisions.md         # ADR-style decision log (D1-D16)
+│   ├── widgets.md           # M5 widget architecture: grid, data layer, separation
+│   ├── roadmap.md           # M0-M5 with sub-tasks
 │   └── recon/               # dated, frozen recon snapshots
 └── cspell.json
 ```

@@ -3,7 +3,11 @@
   "language": "en",
   "words": [
     "eips",
-    "eink"
+    "eink",
+    "gitleaks",
+    "GOPRIVATE",
+    "OpenWeatherMap",
+    "sidecar"
   ],
   "ignorePaths": [
     ".git/**",
