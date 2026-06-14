@@ -2,17 +2,17 @@
 
 Milestones, roughly in order. Each one ends with a working, demonstrable thing — no half-states.
 
-> **Current focus (2026-06-14): close out M4.** M5 shipped; M4.4 healthcheck is
-> done (in-binary `server healthcheck`), and the D15 time-of-day cadence is
-> confirmed live on the device (M4.3). The only M4 work left is **M4.6 —
-> battery/mount** (hardware-led: power delivery at the mount + a clean
-> drain-slope read; the device runs mostly on battery and has hit 4%).
+> **Current focus (2026-06-14): deploy + verify M6 (Calendar).** All M6 code
+> (M6.0–M6.4) is merged: gitleaks guard, secret iCal URL + data model, stdlib ICS
+> parser with bounded RRULE, the `CalendarAgenda` card, and the
+> `CALENDAR_ICS_URL` wiring. The operator has set the secret in the deployment
+> env; what remains is pulling the new GHCR image and confirming the agenda on the
+> wall panel.
 >
-> **Next coding milestone: M6 — Calendar (first private source).** M6.0–M6.3 are
-> done (gitleaks guard; secret iCal URL + data model; stdlib ICS fetch/parse with
-> bounded RRULE; `CalendarAgenda` widget). Last step is **M6.4 — wire via
-> `CALENDAR_ICS_URL` + place in the bottom-left cell + deploy**. See the M6
-> section below.
+> **M4.6 (battery/mount) is deferred** — deprioritized by the operator
+> (2026-06-14); it's hardware-led and not blocking. The rest of M4 is done (D15
+> cadence live, M4.4 healthcheck shipped). Pick the next coding milestone from the
+> post-M4 ideas once M6 is verified on the device.
 
 ## M0 — Repo bootstrap ✅
 

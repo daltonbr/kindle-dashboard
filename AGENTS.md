@@ -13,12 +13,13 @@ A self-hosted family dashboard for an old jailbroken **Kindle 7th gen** (basic t
 | **M1** — Client pipeline (cron + `refresh.sh` + `eips`) | ✅ done, live on the device |
 | **M2** — Minimal Go server + Dockerfile + CI + GHCR publish | ✅ done, rendering on the panel |
 | **M3** — Weather panel (Open-Meteo) | ✅ done, live on the panel |
-| **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | 🔄 in progress — M4.1–4.5 done (D15 cadence confirmed live on device 2026-06-14); only M4.6 (battery/mount + drain-slope read) open |
+| **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | ✅ effectively done — M4.1–4.5 done (D15 cadence confirmed live on device 2026-06-14); **M4.6 (battery/mount) deferred** (deprioritized 2026-06-14, hardware-led, non-blocking) |
 | **M5** — Composable widgets (2×2 grid, data-layer providers) | ✅ done — three weather cards on a 2×2 grid from a typed data layer, live Open-Meteo provider (default, hourly precip + 3-day daily), layout decisions server-side (footer rain, `DASHBOARD_ORIENTATION`), deployed on the panel. First private source (was M5.5) carried forward. See `docs/widgets.md`, decisions [D16]/[D17] |
 | **M6** — Calendar (first private source) | ✅ code complete (M6.0–M6.4) — `gitleaks` CI guard [D18]; `CalendarAgenda` card in the bottom-left cell, fed by a Google Calendar secret iCal URL [D19] behind the `data` seam; stdlib ICS parser + bounded-horizon RRULE, `time/tzdata` embedded [D20]. Inert without `CALENDAR_ICS_URL`. **Remaining: deploy the M6.4 image + on-device verify.** See `docs/roadmap.md` M6 |
 
-**Next up: deploy + verify M6**, then **M4.6** (battery/mount — the only other
-open item) or a new widget. See `docs/roadmap.md`.
+**Next up: deploy + verify M6.** After that, a new widget or capability — pick
+from the post-M4 ideas in `docs/roadmap.md`. **M4.6 (battery/mount) is
+deprioritized/deferred** (operator's call, not a blocker).
 
 See `docs/roadmap.md` for sub-task breakdowns, and `docs/widgets.md` for the M5 widget architecture.
 
