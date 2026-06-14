@@ -56,7 +56,7 @@ func Dashboard(model *data.WeatherModel, opts Options) *image.Gray {
 		drawCalendar(img, g, opts) // calendar is independent of weather (top row)
 		cell := g.CellRect(0, 1, 2, 1)
 		drawAt(img, fonts.Face(30), "Weather unavailable", cell.Min.X+16, (cell.Min.Y+cell.Max.Y)/2, 0)
-		drawFooterCredit(img, g, opts, false)
+		drawFooterCredit(img, g, false)
 		return img
 	}
 
@@ -72,7 +72,7 @@ func Dashboard(model *data.WeatherModel, opts Options) *image.Gray {
 	} else {
 		rain.Render(img, g.CellRect(0, 0, 2, 1)) // rain card takes the top row
 	}
-	drawFooterCredit(img, g, opts, opts.RainInFooter)
+	drawFooterCredit(img, g, opts.RainInFooter)
 
 	return img
 }
@@ -95,11 +95,16 @@ func drawHeader(img *image.Gray, g Grid, opts Options, model *data.WeatherModel)
 	hr := g.HeaderRect()
 	baseY := (hr.Min.Y+hr.Max.Y)/2 + 12
 
+	dateFace := fonts.Face(34)
 	text := opts.Now.Format("Mon 2 Jan")
 	if model != nil {
 		text += fmt.Sprintf("   %d°", int(math.Round(model.Now.TempC)))
 	}
-	drawAt(img, fonts.Face(34), text, hr.Min.X+4, baseY, 0)
+	drawAt(img, dateFace, text, hr.Min.X+4, baseY, 0)
+
+	// Light "updated HH:MM" trailing the date/temp, baseline-aligned.
+	updX := hr.Min.X + 4 + fontMeasure(dateFace, text) + 16
+	drawAt(img, fonts.Face(20), "updated "+opts.Now.Format("15:04"), updX, baseY, 150)
 
 	if opts.Battery != nil {
 		drawBattery(img, image.Rect(0, baseY-28, hr.Max.X, baseY), *opts.Battery)
@@ -108,13 +113,14 @@ func drawHeader(img *image.Gray, g Grid, opts Options, model *data.WeatherModel)
 
 // drawFooterCredit draws the footer text. When the footer band is occupied by
 // the rain strip (rainInFooter), there is no room for text, so this is a no-op.
-func drawFooterCredit(img *image.Gray, g Grid, opts Options, rainInFooter bool) {
+func drawFooterCredit(img *image.Gray, g Grid, rainInFooter bool) {
 	if rainInFooter {
 		return
 	}
+	// The "updated HH:MM" time now lives in the header (always visible), so the
+	// footer carries just the project credit.
 	fr := g.FooterRect()
 	baseY := (fr.Min.Y+fr.Max.Y)/2 + 8
-	drawAt(img, fonts.Face(20), fmt.Sprintf("updated %s", opts.Now.Format("15:04")), fr.Min.X+4, baseY, 60)
 	drawRight(img, fonts.Face(20), "github.com/daltonbr/kindle-dashboard", fr.Max.X-4, baseY, 60)
 }
 

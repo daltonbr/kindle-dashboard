@@ -6,10 +6,11 @@ Milestones, roughly in order. Each one ends with a working, demonstrable thing �
 > (two-line titles) live; M7 (rolling month tile + layout swap) code-complete.**
 > The agenda renders from the real Google Calendar secret iCal feed and titles
 > wrap to two lines / strip unrenderable glyphs (M6.5, deployed + verified). The
-> grid was rearranged (M7.3): **calendar on top** (month grid top-left, agenda
-> top-right), **weather on the bottom** (today bottom-left, forecast
-> bottom-right); the header now shows the current temperature after the date.
-> (M7 — code-complete, **deploy + verify pending**.)
+> grid was rearranged (M7.3, deployed + verified): **calendar on top** (month
+> grid top-left, agenda top-right), **weather on the bottom** (today
+> bottom-left, forecast bottom-right); the header shows the current temperature
+> after the date, plus a light "updated HH:MM" refresh time (M7.4, **deploy +
+> verify pending**).
 >
 > **M4.6 (battery/mount) is deferred** — deprioritized by the operator
 > (2026-06-14); it's hardware-led and not blocking. The rest of M4 is done (D15
@@ -329,8 +330,14 @@ layer.
       the *top* row (calendar yields, weather stays visible). Plus: a light
       vertical rule before the Saturday column sets the weekend apart (`vLine`
       helper), and the header shows the current temperature after the date
-      (`drawHeader` now takes the weather model). **Deploy + verify on the panel
-      pending.**
+      (`drawHeader` now takes the weather model). **Deployed + verified on the
+      panel (2026-06-14).**
+- [x] **M7.4 — "Updated" time in the header.** ✅ The last-refresh time
+      (`updated 16:23`) now renders light/small trailing the date+temp in the
+      header, so it's always visible (it previously lived in the footer credit,
+      which is hidden whenever rain is in the footer — i.e. the default). Removed
+      the now-redundant copy from `drawFooterCredit` (footer keeps just the
+      project credit). **Deploy + verify on the panel pending.**
 
 ---
 
