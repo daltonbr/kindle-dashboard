@@ -3,11 +3,12 @@
 Milestones, roughly in order. Each one ends with a working, demonstrable thing — no half-states.
 
 > **Current focus (2026-06-14): close out M4.** M5 shipped; M4.4 healthcheck is
-> done (in-binary `server healthcheck`). Remaining loose end: deploy the D15
-> time-of-day cadence to the device (`loop.sh`, built but not yet on the Kindle)
-> and review `batt.csv` for the "push to 15 min?" call (M4.3) — needs an ssh
-> window. Battery/mount (M4.6) and the first **private data source** (M5
-> follow-on — Calendar/Home Assistant, needs a `gitleaks` guard) are queued after.
+> done (in-binary `server healthcheck`), and the D15 time-of-day cadence is
+> confirmed live on the device (M4.3). The only M4 work left is **M4.6 —
+> battery/mount**: the device runs mostly on battery (has hit 4%), so the open
+> questions are power delivery at the mount and a clean drain-slope read before
+> touching the daytime cadence. After M4: the first **private data source** (M5
+> follow-on — Calendar/Home Assistant, needs a `gitleaks` guard).
 
 ## M0 — Repo bootstrap ✅
 
@@ -130,8 +131,14 @@ Deployed and validated on 2026-05-26. The daemon ran ~10 hours unattended overni
 ### M4.3 — Interval policy: production cadence + time-of-day awareness
 
 - [x] Bumped `INTERVAL` from soak value (5 min) to 10 min (600s) on 2026-05-26. Daemon (pid 7653) running with the new cadence; first cycle confirmed `cycle … < 600s/2 — sleeping …` in the log.
-- [ ] After ~24h of 10-min cycles, review `state/batt.csv` slope and decide whether to push toward 15 min.
-- [x] Schedule-aware interval (2026-06-13): `loop.sh` now picks its interval per-cycle from the wall clock — `INTERVAL` (10 min) by day, `NIGHT_INTERVAL` (1 h) from 00:00–07:00. Config-driven via `NIGHT_INTERVAL`/`NIGHT_START`/`NIGHT_END`; defaults bake in the policy. See [D15](decisions.md#d15--time-of-day-refresh-cadence) and [client.md](client.md#refresh-cadence-and-how-to-tweak-it). **Not yet deployed to the device** — pending an ssh window (device currently suspended).
+- [ ] Decide whether to push the daytime cadence past 10 min. Needs a clean
+      battery-only window to measure slope: `batt.csv` (2838 samples as of
+      2026-06-14) spans min 4% / max 100% / avg 64%, but only ~7% of samples are
+      charging, so drain segments are interleaved with charge events — isolate a
+      no-charge stretch before deciding. The 4% low says power delivery (M4.6)
+      matters more than shaving the cadence right now.
+- [x] Schedule-aware interval (2026-06-13): `loop.sh` now picks its interval per-cycle from the wall clock — `INTERVAL` (10 min) by day, `NIGHT_INTERVAL` (1 h) from 00:00–07:00. Config-driven via `NIGHT_INTERVAL`/`NIGHT_START`/`NIGHT_END`; defaults bake in the policy. See [D15](decisions.md#d15--time-of-day-refresh-cadence) and [client.md](client.md#refresh-cadence-and-how-to-tweak-it).
+- [x] **Deployed + verified on device (2026-06-14):** the device's `loop.sh` matches the repo byte-for-byte, and the night cadence is firing (1 h wakealarms observed in `loop.log` during the 00:00–07:00 window). The earlier "not yet deployed" note was stale.
 
 ### Open observation window (started 2026-05-26 ~11:11 BST)
 
