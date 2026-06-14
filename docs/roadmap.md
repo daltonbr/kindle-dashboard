@@ -9,8 +9,8 @@ Milestones, roughly in order. Each one ends with a working, demonstrable thing �
 > grid was rearranged (M7.3, deployed + verified): **calendar on top** (month
 > grid top-left, agenda top-right), **weather on the bottom** (today
 > bottom-left, forecast bottom-right); the header shows the current temperature
-> after the date, plus a light "updated HH:MM" refresh time (M7.4, **deploy +
-> verify pending**).
+> after the date, plus a light "updated HH:MM" refresh time (M7.4). **All of M7
+> is deployed + verified on the panel (2026-06-14); now soaking.**
 >
 > **M4.6 (battery/mount) is deferred** — deprioritized by the operator
 > (2026-06-14); it's hardware-led and not blocking. The rest of M4 is done (D15
@@ -337,7 +337,7 @@ layer.
       header, so it's always visible (it previously lived in the footer credit,
       which is hidden whenever rain is in the footer — i.e. the default). Removed
       the now-redundant copy from `drawFooterCredit` (footer keeps just the
-      project credit). **Deploy + verify on the panel pending.**
+      project credit). **Deployed + verified on the panel (2026-06-14).**
 
 ---
 

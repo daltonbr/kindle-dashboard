@@ -16,12 +16,12 @@ A self-hosted family dashboard for an old jailbroken **Kindle 7th gen** (basic t
 | **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | ✅ effectively done — M4.1–4.5 done (D15 cadence confirmed live on device 2026-06-14); refresh-freeze bug fixed 2026-06-14 (fast-return guard no longer plain-sleeps; all idle via `suspend_for()`, [D21]); **M4.6 (battery/mount) deferred** (deprioritized 2026-06-14, hardware-led, non-blocking) |
 | **M5** — Composable widgets (2×2 grid, data-layer providers) | ✅ done — three weather cards on a 2×2 grid from a typed data layer, live Open-Meteo provider (default, hourly precip + 3-day daily), layout decisions server-side (footer rain, `DASHBOARD_ORIENTATION`), deployed on the panel. First private source (was M5.5) carried forward. See `docs/widgets.md`, decisions [D16]/[D17] |
 | **M6** — Calendar (first private source) | ✅ done — live on the panel (deployed + verified 2026-06-14). `gitleaks` CI guard [D18]; `CalendarAgenda` card (top-right cell since M7.3), fed by a Google Calendar secret iCal URL [D19] behind the `data` seam; stdlib ICS parser + bounded-horizon RRULE, `time/tzdata` embedded [D20]. Inert without `CALENDAR_ICS_URL`. Titles wrap to two lines, collapsing to one when they fit (M6.5, 2026-06-14). Soak/monitoring for real-feed edge cases. See `docs/roadmap.md` M6 |
-| **M7** — Rolling month tile + layout swap | ✅ code-complete (deploy + verify pending). `CalendarMonth` card (top-left cell): a Monday-first rolling 4-week grid (today highlighted, event-days dotted, spanning month label, light weekend separator) plus a "later" footer showing events beyond the agenda's window — both tiles share `defaultAgendaEvents` so they complement, not duplicate. M7.3 rearranged the grid (**calendar top row, weather bottom row**) and added the current temperature after the header date; M7.4 added a light "updated HH:MM" refresh time in the header (moved out of the footer). Pure render layer, no new provider/secret. See `docs/roadmap.md` M7 |
+| **M7** — Rolling month tile + layout swap | ✅ done — deployed + verified on the panel (2026-06-14), now soaking. `CalendarMonth` card (top-left cell): a Monday-first rolling 4-week grid (today highlighted, event-days dotted, spanning month label, light weekend separator) plus a "later" footer showing events beyond the agenda's window — both tiles share `defaultAgendaEvents` so they complement, not duplicate. M7.3 rearranged the grid (**calendar top row, weather bottom row**) and added the current temperature after the header date; M7.4 added a light "updated HH:MM" refresh time in the header (moved out of the footer). Pure render layer, no new provider/secret. See `docs/roadmap.md` M7 |
 
-**Next up: no milestone chosen yet.** M7 is code-complete but needs deploy +
-verify on the panel; after that, pick the next widget/capability from the
-post-M4 ideas in `docs/roadmap.md`. **M4.6 (battery/mount) is deferred**
-(deprioritized 2026-06-14, hardware-led, not a blocker).
+**Next up: no milestone chosen yet.** M7 is deployed and soaking on the panel;
+once it looks clean, pick the next widget/capability from the post-M4 ideas in
+`docs/roadmap.md`. **M4.6 (battery/mount) is deferred** (deprioritized
+2026-06-14, hardware-led, not a blocker).
 
 See `docs/roadmap.md` for sub-task breakdowns, and `docs/widgets.md` for the M5 widget architecture.
 
