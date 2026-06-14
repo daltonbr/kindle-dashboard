@@ -44,6 +44,7 @@ M3 will add `internal/weather/` (Open-Meteo client + TTL cache) and embedded TTF
 | --- | --- | --- |
 | `PORT` | `8080` | Listening port inside the container. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. Standard `slog.Level` text. |
+| `DASHBOARD_ORIENTATION` | `portrait` | Default page orientation: `portrait` (600×800) or `landscape` (800×600). Server-side so the device fetches a bare `/dashboard.png`; `?orientation=` overrides per-request (used by `/preview`). |
 | `WEATHER_PROVIDER` | `openmeteo` | `openmeteo` (live Open-Meteo client+cache, the default) or `demo` (network-free fixture, for widget development and offline runs). |
 | `WEATHER_LAT` | `50.8225` | Latitude for the Open-Meteo lookup. Default is Brighton, UK. *(only used when `WEATHER_PROVIDER=openmeteo`)* |
 | `WEATHER_LON` | `-0.1372` | Longitude for the Open-Meteo lookup. *(openmeteo only)* |
@@ -76,11 +77,13 @@ The repo is public. The rule (see [D16](decisions.md#d16--widget-data-layer-in-r
 | GET | `/healthz` | `200 OK` body `ok\n`. |
 | GET | `/preview` | HTML preview page wrapping `/dashboard.png`. |
 
-**`/dashboard.png` query params** (all optional):
+**`/dashboard.png` query params** (all optional). Layout decisions live
+server-side (orientation, rain placement), so the wall device only ever sends
+its own telemetry — `batt`/`plug`. The rest exist mainly for `/preview`:
 
 | Param | Values | Effect |
 | --- | --- | --- |
-| `orientation` | `landscape` | Render 800×600 (default is portrait 600×800). |
+| `orientation` | `portrait`/`landscape` | Override the server default (`DASHBOARD_ORIENTATION`) for this request. |
 | `rain` | `card` | Render the rain timeline as the in-grid 2×1 card. **Default is the footer strip** — the placement decision lives server-side so the device fetches a bare `/dashboard.png`. |
 | `batt` | `0`–`100` | Show the battery indicator at that level (absent ⇒ no indicator). |
 | `plug` | `1`/`true` | With `batt`, overlays a charging bolt. |

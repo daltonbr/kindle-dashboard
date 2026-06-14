@@ -38,8 +38,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	orientationName := envOrDefault("DASHBOARD_ORIENTATION", "portrait")
+	defaultOrientation := orientationFromName(orientationName)
+	slog.Info("default orientation", "value", orientationName)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(provider))
+	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(provider, defaultOrientation))
 	mux.HandleFunc("GET /healthz", handleHealth)
 	mux.HandleFunc("GET /preview", handlePreview)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +111,7 @@ func buildWeatherCache() (*weather.Cache, error) {
 	return weather.NewCache(weather.NewClient("", nil), lat, lon, ttl), nil
 }
 
-func makeDashboardHandler(provider data.WeatherProvider) http.HandlerFunc {
+func makeDashboardHandler(provider data.WeatherProvider, defaultOrientation render.Orientation) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fetchCtx, cancel := context.WithTimeout(r.Context(), weatherFetchTimeout)
 		defer cancel()
@@ -122,7 +126,7 @@ func makeDashboardHandler(provider data.WeatherProvider) http.HandlerFunc {
 
 		q := r.URL.Query()
 		opts := render.Options{
-			Orientation:  parseOrientation(q),
+			Orientation:  parseOrientation(q, defaultOrientation),
 			Now:          time.Now(),
 			Battery:      parseBattery(q),
 			RainInFooter: parseRainInFooter(q),
@@ -137,9 +141,28 @@ func makeDashboardHandler(provider data.WeatherProvider) http.HandlerFunc {
 	}
 }
 
-// parseOrientation reads ?orientation=landscape (anything else ⇒ portrait).
-func parseOrientation(q map[string][]string) render.Orientation {
-	if v := q["orientation"]; len(v) > 0 && strings.EqualFold(v[0], "landscape") {
+// parseOrientation reads ?orientation=portrait|landscape, falling back to the
+// server-configured default when the param is absent or unrecognised. The wall
+// device relies on the default; the param exists mainly for the preview page.
+func parseOrientation(q map[string][]string, def render.Orientation) render.Orientation {
+	v := q["orientation"]
+	if len(v) == 0 || v[0] == "" {
+		return def
+	}
+	switch {
+	case strings.EqualFold(v[0], "landscape"):
+		return render.Landscape
+	case strings.EqualFold(v[0], "portrait"):
+		return render.Portrait
+	default:
+		return def
+	}
+}
+
+// orientationFromName maps the DASHBOARD_ORIENTATION setting to a render value.
+// Anything other than "landscape" is portrait (the default wall layout).
+func orientationFromName(s string) render.Orientation {
+	if strings.EqualFold(s, "landscape") {
 		return render.Landscape
 	}
 	return render.Portrait
