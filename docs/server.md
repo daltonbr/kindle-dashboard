@@ -165,17 +165,13 @@ docker run -d \
   --read-only \
   --cap-drop ALL \
   --security-opt no-new-privileges \
-  --health-cmd 'wget -qO- http://127.0.0.1:8080/healthz || exit 1' \
-  --health-interval 30s \
-  --health-timeout 3s \
-  --health-retries 3 \
   ghcr.io/daltonbr/kindle-dashboard:latest
 ```
 
 Notes:
 - Change the **host** port (`-p HOST:8080`) if 8080 is taken. Container port stays 8080.
 - `--read-only` is safe — the server writes nothing to disk.
-- The `wget` healthcheck **will not work against the `FROM scratch` image** as written (no shell, no wget). Either drop `--health-*` and rely on host-side checks, or use a sidecar healthcheck container. Resolved properly in M4.3.
+- **Healthcheck is baked into the image** (M4.4): the Dockerfile's `HEALTHCHECK` runs `/server healthcheck`, which the binary answers itself (no shell/wget needed in `FROM scratch`). It probes `/healthz` on `127.0.0.1:$PORT`. Override with `--health-cmd '/server healthcheck'` only if you need different interval/timeout; otherwise nothing to add.
 
 **Compose** (typical):
 
@@ -194,8 +190,13 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
-    # healthcheck: see note above — FROM scratch has no shell/wget.
-    # Add a host-side check or a sidecar; M4.3 will resolve in-binary.
+    # The image ships a HEALTHCHECK (/server healthcheck). Override here only to
+    # tune timing or the port:
+    # healthcheck:
+    #   test: ["CMD", "/server", "healthcheck"]
+    #   interval: 30s
+    #   timeout: 3s
+    #   retries: 3
 ```
 
 To pin a specific build instead of `:latest`:

@@ -2,12 +2,12 @@
 
 Milestones, roughly in order. Each one ends with a working, demonstrable thing — no half-states.
 
-> **Current focus (2026-06-14): close out M4.** M5 shipped; the next step is
-> finishing M4's loose ends — (1) deploy the D15 time-of-day cadence to the
-> device (`loop.sh`, built but not yet on the Kindle) and review `batt.csv` for
-> the "push to 15 min?" call (M4.3), and (2) decide + wire the M4.4 healthcheck.
-> Battery/mount (M4.6) and the first **private data source** (M5 follow-on —
-> Calendar/Home Assistant, needs a `gitleaks` guard) are queued after.
+> **Current focus (2026-06-14): close out M4.** M5 shipped; M4.4 healthcheck is
+> done (in-binary `server healthcheck`). Remaining loose end: deploy the D15
+> time-of-day cadence to the device (`loop.sh`, built but not yet on the Kindle)
+> and review `batt.csv` for the "push to 15 min?" call (M4.3) — needs an ssh
+> window. Battery/mount (M4.6) and the first **private data source** (M5
+> follow-on — Calendar/Home Assistant, needs a `gitleaks` guard) are queued after.
 
 ## M0 — Repo bootstrap ✅
 
@@ -142,17 +142,13 @@ Daemon left running unattended at `INTERVAL=600`. When picking this back up, loo
 - **Orphan-loop or guard-exit log lines** — `another loop.sh is already running` should NOT appear under steady-state operation. If it does, the watchdog and the daemon are racing for some reason.
 - **Ghost-refresh cycles** — every 12 cycles now = every 2h at the new cadence. Should see one of these per ~2h in the log.
 
-### M4.4 — Healthcheck wiring (server-side)
+### M4.4 — Healthcheck wiring (server-side) ✅
 
 The image is `FROM scratch` — no shell, no `wget`/`curl` — so a Docker
-`HEALTHCHECK` can't use `CMD-SHELL`. **Plan (chosen):** give the binary a
-`healthcheck` subcommand (`./server healthcheck`) that does a localhost `GET
-/healthz` against `$PORT` and exits 0/1, so compose can use
-`HEALTHCHECK CMD ["/server", "healthcheck"]`. Self-contained, needs no extra
-files in the image.
+`HEALTHCHECK` can't use `CMD-SHELL`. **Solution:** the binary checks itself.
 
-- [ ] Add the `healthcheck` subcommand to `main.go` (dial `127.0.0.1:$PORT/healthz`, short timeout, exit code = result). Unit-test the exit logic.
-- [ ] Add a `HEALTHCHECK` line to the Dockerfile and document the compose snippet in `server.md` (Deploy recipes already reference a healthcheck — align it).
+- [x] `server healthcheck` subcommand in `main.go` — GETs `127.0.0.1:$PORT/healthz` with a 2s timeout and exits 0 (200) / 1 (anything else). Unit-tested (`main_test.go`: 200, non-200, refused, bad URL).
+- [x] Dockerfile `HEALTHCHECK CMD ["/server", "healthcheck"]` (30s interval, 3s timeout, 5s start-period, 3 retries). Verified against a built image — container reports `healthy`. `server.md` deploy recipes updated to drop the broken `wget` check.
 
 ### M4.5 — Daemon survival across reboots ✅
 

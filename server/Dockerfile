@@ -38,4 +38,9 @@ USER 65534:65534
 # Documentation only; the actual port is whatever PORT env var is set to.
 EXPOSE 8080
 
+# The binary checks itself — no shell/wget needed in the scratch image. Honours
+# the PORT env var via the subcommand.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+        CMD ["/server", "healthcheck"]
+
 ENTRYPOINT ["/server"]

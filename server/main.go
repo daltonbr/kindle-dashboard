@@ -29,6 +29,15 @@ const weatherFetchTimeout = 8 * time.Second
 
 func main() {
 	port := envOrDefault("PORT", "8080")
+
+	// Healthcheck subcommand: the FROM-scratch image has no shell, so a Docker
+	// HEALTHCHECK can't use wget/curl. `server healthcheck` probes /healthz on
+	// localhost and exits 0 (healthy) / 1 (not), giving compose a self-contained
+	// check: HEALTHCHECK CMD ["/server", "healthcheck"].
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(healthcheck("http://127.0.0.1:"+port+"/healthz", 2*time.Second))
+	}
+
 	logger := newLogger(envOrDefault("LOG_LEVEL", "info"))
 	slog.SetDefault(logger)
 
@@ -203,6 +212,29 @@ func parseBattery(q map[string][]string) *render.Battery {
 		}
 	}
 	return &render.Battery{Level: level, Charging: charging}
+}
+
+// healthcheck performs a one-shot GET against url and returns a process exit
+// code: 0 if the server answers 200, 1 otherwise (connection refused, timeout,
+// or any non-200). Used by the `server healthcheck` subcommand.
+func healthcheck(url string, timeout time.Duration) int {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 1
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 1
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusOK {
+		return 0
+	}
+	return 1
 }
 
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
