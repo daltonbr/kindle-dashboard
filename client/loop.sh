@@ -213,6 +213,34 @@ draw() {
     fi
 }
 
+suspend_for() {
+    # Suspend to mem for $1 seconds, woken by the RTC alarm. This is the ONLY
+    # safe way for the daemon to idle: a plain userspace `sleep` uses
+    # CLOCK_MONOTONIC (busybox nanosleep), which does NOT advance while the
+    # device is suspended. powerd (still running — we only stop framework and
+    # lab126_gui) idle-suspends the panel after a few minutes, so any userspace
+    # sleep longer than powerd's idle timeout freezes mid-count and never
+    # returns. That stalled the whole loop for ~8h on 2026-06-14. Arming the
+    # RTC + `echo mem` keeps the suspend under our control and guarantees a wake.
+    secs=$1
+    now=$(date +%s)
+    if [ -w "$RTC/wakealarm" ]; then
+        echo 0 > "$RTC/wakealarm" 2>/dev/null || true
+        echo $(( now + secs )) > "$RTC/wakealarm" 2>/dev/null || log "wakealarm: failed to arm"
+        log "armed wakealarm for ${secs}s"
+    else
+        log "wakealarm: $RTC/wakealarm not writable — sleeping with plain sleep"
+        sleep "$secs"
+        return
+    fi
+    if [ -w /sys/power/state ]; then
+        echo mem > /sys/power/state 2>/dev/null \
+            || { log "suspend failed; sleeping ${secs}s in userspace"; sleep "$secs"; }
+    else
+        sleep "$secs"
+    fi
+}
+
 read_battery() {
     # Populate BATT_LEVEL (0-100) and BATT_CHARGING (0/1) from LIPC. Both
     # may end up empty if the properties aren't available on this firmware
@@ -288,27 +316,8 @@ while :; do
     # boundary is picked up on the next wake without restarting the daemon.
     interval=$(current_interval)
 
-    # Arm the RTC alarm. Clear-then-set is the kernel's documented pattern.
-    if [ -w "$RTC/wakealarm" ]; then
-        echo 0 > "$RTC/wakealarm" 2>/dev/null || true
-        echo $(( cycle_start + interval )) > "$RTC/wakealarm" 2>/dev/null \
-            || log "wakealarm: failed to arm"
-        log "armed wakealarm for ${interval}s"
-    else
-        log "wakealarm: $RTC/wakealarm not writable — sleeping with plain sleep"
-        sleep "$interval"
-    fi
-
-    # Suspend. Blocks until the alarm (or USB plug, or other wakeup source)
-    # fires. On failure (e.g. /sys/power/state not writable for some
-    # reason), fall back to a userspace sleep so the loop still makes
-    # progress.
-    if [ -w /sys/power/state ]; then
-        echo mem > /sys/power/state 2>/dev/null \
-            || { log "suspend failed; sleeping ${interval}s in userspace"; sleep "$interval"; }
-    else
-        sleep "$interval"
-    fi
+    # Suspend until the RTC alarm (or USB plug, or other wakeup source) fires.
+    suspend_for "$interval"
 
     wake_at=$(date +%s)
     slept=$(( wake_at - cycle_start ))
@@ -338,12 +347,20 @@ while :; do
 
     # Fast-return guard. If something woke us early (USB plug, stray
     # wakeup source), don't immediately re-enter suspend — that risks a
-    # hot spin. Sleep the remainder of the nominal interval first.
+    # hot spin. Wait out the remainder of the nominal interval first.
     cycle_end=$(date +%s)
     cycle_len=$(( cycle_end - cycle_start ))
     if [ "$cycle_len" -lt $(( interval / 2 )) ]; then
         remainder=$(( interval - cycle_len ))
-        log "fast-return guard: cycle ${cycle_len}s < ${interval}s/2 — sleeping ${remainder}s"
-        sleep "$remainder"
+        log "fast-return guard: cycle ${cycle_len}s < ${interval}s/2 — re-suspending for ${remainder}s"
+        # Brief userspace cooldown to ride out a transient asserted wake
+        # source, then re-suspend properly. The cooldown is deliberately
+        # short (5s): a long userspace sleep here would hand the idle window
+        # to powerd, which idle-suspends the panel and freezes the sleep
+        # (nanosleep doesn't advance across suspend) — the bug that stalled
+        # the loop for ~8h on 2026-06-14. See suspend_for().
+        sleep 5
+        remainder=$(( remainder - 5 ))
+        [ "$remainder" -gt 0 ] && suspend_for "$remainder"
     fi
 done

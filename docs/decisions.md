@@ -552,3 +552,34 @@ agenda widget shows the next few events, so a short horizon loses nothing.
 **Revisit when:** we need full RFC 5545 recurrence fidelity (then reconsider
 `teambition/rrule-go` + an ICS parser, with the dependency cost accepted here),
 or the horizon proves too short for a very sparse calendar.
+
+## D21 — Daemon idle must always suspend, never plain-sleep (amends D14)
+
+**Decision:** Every idle wait in `loop.sh` longer than a few seconds goes
+through `suspend_for()` — arm the RTC wakealarm, then `echo mem > /sys/power/state`.
+The fast-return guard, which previously did a plain userspace `sleep "$remainder"`
+(up to ~42 min), now does a short 5 s cooldown and then `suspend_for` the rest.
+
+**Why:** On 2026-06-14 the dashboard was found showing the stock Kindle sleep
+screen, frozen since 03:20. Root cause: a transient early wake triggered the
+fast-return guard's long userspace `sleep`. Busybox `sleep` uses `nanosleep()`
+on `CLOCK_MONOTONIC`, which does **not advance while the device is suspended**.
+We stop `framework` and `lab126_gui` but **not `powerd`**, and powerd
+idle-suspends the panel after a few minutes — so the long sleep was suspended
+mid-count, its timer froze, and the whole loop parked in `do_wait` for ~8 h.
+powerd, left to its own devices during that window, drew its stock screensaver.
+
+The controlled `echo mem` + RTC-alarm path never had this problem (it ran clean
+10-min cycles all evening) precisely because the suspend is ours and the wake is
+a hardware alarm. The lesson: any userspace `sleep` longer than powerd's idle
+timeout is a latent freeze. The 5 s cooldown is short enough that powerd can't
+idle-suspend during it, preserving the guard's original "ride out a transient
+wake source before re-suspending" intent.
+
+**Verified:** redeployed and run end-to-end at a temporary `INTERVAL=120`:
+clean `armed wakealarm → wake after ~103s → fetch ok → re-armed` cycles with no
+stalls, then restored to `INTERVAL=600`.
+
+**Revisit when:** powerd's autonomous suspend/screensaver behaviour causes other
+interference — at which point consider stopping or muzzling powerd directly
+(e.g. `lipc-set-prop` to prevent its screensaver) rather than only racing it.

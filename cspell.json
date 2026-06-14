@@ -6,8 +6,12 @@
     "eink",
     "gitleaks",
     "GOPRIVATE",
+    "lipc",
+    "nanosleep",
     "OpenWeatherMap",
-    "sidecar"
+    "powerd",
+    "sidecar",
+    "wakealarm"
   ],
   "ignorePaths": [
     ".git/**",
