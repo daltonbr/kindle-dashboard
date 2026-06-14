@@ -125,7 +125,7 @@ func makeDashboardHandler(provider data.WeatherProvider) http.HandlerFunc {
 			Orientation:  parseOrientation(q),
 			Now:          time.Now(),
 			Battery:      parseBattery(q),
-			RainInFooter: q.Get("rain") == "footer",
+			RainInFooter: parseRainInFooter(q),
 		}
 
 		img := render.Dashboard(model, opts)
@@ -143,6 +143,16 @@ func parseOrientation(q map[string][]string) render.Orientation {
 		return render.Landscape
 	}
 	return render.Portrait
+}
+
+// parseRainInFooter decides where the rain timeline is drawn. Footer is the
+// server-side default so the wall device can fetch a bare /dashboard.png; pass
+// ?rain=card to place it as the in-grid 2×1 card instead.
+func parseRainInFooter(q map[string][]string) bool {
+	if v := q["rain"]; len(v) > 0 && strings.EqualFold(v[0], "card") {
+		return false
+	}
+	return true
 }
 
 // parseBattery extracts the optional battery widget params from the

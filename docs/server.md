@@ -81,7 +81,7 @@ The repo is public. The rule (see [D16](decisions.md#d16--widget-data-layer-in-r
 | Param | Values | Effect |
 | --- | --- | --- |
 | `orientation` | `landscape` | Render 800×600 (default is portrait 600×800). |
-| `rain` | `footer` | Render the rain timeline as the footer strip instead of the bottom 2×1 card. |
+| `rain` | `card` | Render the rain timeline as the in-grid 2×1 card. **Default is the footer strip** — the placement decision lives server-side so the device fetches a bare `/dashboard.png`. |
 | `batt` | `0`–`100` | Show the battery indicator at that level (absent ⇒ no indicator). |
 | `plug` | `1`/`true` | With `batt`, overlays a charging bolt. |
 

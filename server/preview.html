@@ -34,7 +34,7 @@
       <option value="landscape">landscape (800×600)</option>
     </select>
   </label>
-  <label><input id="rainFooter" type="checkbox"> rain in footer</label>
+  <label><input id="rainFooter" type="checkbox" checked> rain in footer</label>
 </fieldset>
 <fieldset class="row">
   <legend>optional device telemetry</legend>
@@ -62,7 +62,7 @@
     const params = new URLSearchParams();
     params.set('t', String(Date.now())); // cache-buster
     if (orientationSelect.value === 'landscape') params.set('orientation', 'landscape');
-    if (rainFooterCheckbox.checked) params.set('rain', 'footer');
+    params.set('rain', rainFooterCheckbox.checked ? 'footer' : 'card');
     if (battInput.value !== '') {
       params.set('batt', battInput.value);
       if (plugCheckbox.checked) params.set('plug', '1');
