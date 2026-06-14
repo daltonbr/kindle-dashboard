@@ -8,9 +8,10 @@ Milestones, roughly in order. Each one ends with a working, demonstrable thing �
 > battery/mount** (hardware-led: power delivery at the mount + a clean
 > drain-slope read; the device runs mostly on battery and has hit 4%).
 >
-> **Next coding milestone: M6 — Calendar (first private source).** M6.0
-> (`gitleaks` guard) and M6.1 (secret iCal URL + data model) are done; next is
-> **M6.2 — ICS fetch + parse** (TTL-cached). See the M6 section below.
+> **Next coding milestone: M6 — Calendar (first private source).** M6.0–M6.2 are
+> done (gitleaks guard; secret iCal URL + data model; stdlib ICS fetch/parse with
+> bounded RRULE). Next is **M6.3 — the `CalendarAgenda` widget** (built against
+> `DemoCalendar`). See the M6 section below.
 
 ## M0 — Repo bootstrap ✅
 
@@ -243,10 +244,16 @@ without config:
       `data.CalendarModel` (events: title/start/end/all-day) + `Upcoming(from,n)`
       helper, `CalendarProvider` interface, and `DemoCalendar` fixture landed in
       `internal/data/` with tests.
-- [ ] **M6.2 — ICS fetch + parse.** Fetch the feed (TTL-cached like weather) and
-      parse VEVENTs. **Key decision:** minimal stdlib VEVENT parser vs a small
-      dep (e.g. an ical library) — recurrence (RRULE) + timezones are the
-      deciding factor; a dep needs a `decisions.md` entry (stdlib-first rule).
+- [x] **M6.2 — ICS fetch + parse.** ✅ Chose **stdlib + bounded-horizon RRULE**
+      over an ical dep — see [D20](decisions.md#d20--ics-parsing-stdlib-bounded-horizon-recurrence-no-ical-dependency).
+      New `internal/calendar/` package: `Client` (fetch), hand-rolled VEVENT
+      parser (line unfolding, TZID/UTC/floating/all-day, `time/tzdata` embedded
+      for the scratch image), RRULE subset (DAILY/WEEKLY/MONTHLY/YEARLY +
+      INTERVAL/COUNT/UNTIL/BYDAY/BYMONTHDAY) with EXDATE + RECURRENCE-ID
+      overrides, single-flight TTL `Cache` mirroring weather, and an `Expand`
+      windower. `data.ICSCalendar` adapts it onto the provider seam. Thoroughly
+      unit-tested (parse, recurrence incl. DST/short-month, override
+      suppression, cache, adapter); golangci-lint clean, no new module.
 - [ ] **M6.3 — `CalendarAgenda` widget.** Draw the next N events into a 1×1 cell,
       reusing the widget drawing helpers; respect the ~20px legibility floor.
       Develop against `DemoCalendar` first.

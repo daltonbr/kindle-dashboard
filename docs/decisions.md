@@ -494,3 +494,61 @@ calendar under *Settings for my calendars* → *Integrate calendar* → **"Secre
 address in iCal format"**. Store it in the Ansible vault; deploy as
 `CALENDAR_ICS_URL`. Never paste the real value into the repo or these docs —
 `server.md` carries a placeholder only.
+
+---
+
+## D20 — ICS parsing: stdlib, bounded-horizon recurrence (no ical dependency)
+
+**Decision (M6.2):** Parse the iCal feed with a **hand-rolled VEVENT parser in
+the standard library** and expand recurrence with a **bounded subset of RRULE**,
+rather than pulling in an ical/recurrence dependency. Timezones resolve via
+`time.LoadLocation` against the **embedded** zone database (`import _
+"time/tzdata"`), which is stdlib and adds no module. The new code lives in
+`server/internal/calendar/` (client + TTL `Cache` mirroring `internal/weather`),
+with `data.ICSCalendar` adapting it onto the `CalendarProvider` seam.
+
+**What's supported:**
+
+- VEVENT fields: `SUMMARY`, `DTSTART`/`DTEND` (timed, `Z`/UTC, floating,
+  `VALUE=DATE` all-day), `UID`, `STATUS:CANCELLED`, `RECURRENCE-ID`, `EXDATE`.
+  RFC 5545 line unfolding and TEXT unescaping (`\n \, \; \\`).
+- RRULE: `FREQ` DAILY/WEEKLY/MONTHLY/YEARLY with `INTERVAL`, `COUNT`, `UNTIL`,
+  `BYDAY` (plain weekday list), `BYMONTHDAY`.
+- Series correctness: `EXDATE` removal, `STATUS:CANCELLED` skip, and
+  `RECURRENCE-ID` overrides (the moved instance shows, the master's original
+  instance is suppressed).
+
+**Bounded horizon is the key simplification.** Occurrences are only materialised
+inside a small future window (`data.DefaultHorizon` = 45 days). A general RRULE
+iterator is a notorious rabbit hole; over a ~6-week window a naive
+step-and-test expander is simple, fast, and easy to test exhaustively. The
+agenda widget shows the next few events, so a short horizon loses nothing.
+
+**Why stdlib over a dependency:**
+
+- **No clean single dep exists anyway.** Go's ecosystem splits ICS *parsing*
+  (`arran4/golang-ical`, `emersion/go-ical`) from RRULE *expansion*
+  (`teambition/rrule-go`) — doing this with libraries means **two** new
+  dependencies, not one.
+- **Supply-chain ethos (D1).** This would be the first non-Go-team, non-image
+  dependency. The bounded-window approach keeps the whole feature in code we
+  own and can test, preserving the "boring deps" story that motivated Go.
+- **`FROM scratch` timezone fix is stdlib.** The image ships no
+  `/usr/share/zoneinfo`, so `time.LoadLocation("Europe/London")` (needed for
+  `DTSTART;TZID=…`) would fail at runtime. `import _ "time/tzdata"` embeds the DB
+  in the binary (~450 KB) — stdlib, no module, no Dockerfile change.
+
+**Trade-offs / known gaps (documented, degrade gracefully):**
+
+- Unsupported rule parts — ordinal `BYDAY` (`2MO`, `-1FR`), `BYSETPOS`,
+  `BYWEEKNO`, `BYYEARDAY`, sub-daily `FREQ` — make `parseRRule` return an error;
+  the event then renders as a **single** DTSTART occurrence rather than silently
+  showing wrong dates.
+- `FREQ=YEARLY` on Feb 29 shifts to Mar 1 in non-leap years (Go's `AddDate`
+  normalisation). Acceptable; revisit if a real Feb-29 anniversary matters.
+- Expansion is capped at 10 000 generated candidates per series as a
+  runaway guard (~27 years of daily stepping — far beyond any agenda window).
+
+**Revisit when:** we need full RFC 5545 recurrence fidelity (then reconsider
+`teambition/rrule-go` + an ICS parser, with the dependency cost accepted here),
+or the horizon proves too short for a very sparse calendar.
