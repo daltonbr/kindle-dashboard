@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/daltonbr/kindle-dashboard/server/internal/data"
 	"github.com/daltonbr/kindle-dashboard/server/internal/render"
 	"github.com/daltonbr/kindle-dashboard/server/internal/weather"
 )
@@ -21,29 +22,24 @@ import (
 //go:embed preview.html
 var previewHTML []byte
 
-const (
-	panelWidth  = 600
-	panelHeight = 800
-
-	// Per-request budget for fetching weather. Cron-side curl times out at 20s,
-	// PNG encode is ~10ms — 8s gives Open-Meteo + cache plenty of headroom and
-	// still leaves time for the encode + transfer.
-	weatherFetchTimeout = 8 * time.Second
-)
+// Per-request budget for fetching weather. Cron-side curl times out at 20s,
+// PNG encode is ~10ms — 8s gives Open-Meteo + cache plenty of headroom and
+// still leaves time for the encode + transfer.
+const weatherFetchTimeout = 8 * time.Second
 
 func main() {
 	port := envOrDefault("PORT", "8080")
 	logger := newLogger(envOrDefault("LOG_LEVEL", "info"))
 	slog.SetDefault(logger)
 
-	cache, err := buildWeatherCache()
+	provider, err := buildWeatherProvider()
 	if err != nil {
 		slog.Error("weather config", "err", err)
 		os.Exit(1)
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(cache))
+	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(provider))
 	mux.HandleFunc("GET /healthz", handleHealth)
 	mux.HandleFunc("GET /preview", handlePreview)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +72,24 @@ func main() {
 	_ = srv.Shutdown(shutdownCtx)
 }
 
+// buildWeatherProvider selects the weather data source. Defaults to the
+// network-free demo fixture during M5 widget development; set
+// WEATHER_PROVIDER=openmeteo to use the live Open-Meteo client+cache.
+func buildWeatherProvider() (data.WeatherProvider, error) {
+	switch strings.ToLower(envOrDefault("WEATHER_PROVIDER", "demo")) {
+	case "openmeteo":
+		cache, err := buildWeatherCache()
+		if err != nil {
+			return nil, err
+		}
+		slog.Info("weather provider", "kind", "openmeteo")
+		return data.NewOpenMeteo(cache), nil
+	default:
+		slog.Info("weather provider", "kind", "demo")
+		return data.DemoWeather{}, nil
+	}
+}
+
 func buildWeatherCache() (*weather.Cache, error) {
 	lat, err := strconv.ParseFloat(envOrDefault("WEATHER_LAT", "50.8225"), 64)
 	if err != nil {
@@ -93,28 +107,42 @@ func buildWeatherCache() (*weather.Cache, error) {
 	return weather.NewCache(weather.NewClient("", nil), lat, lon, ttl), nil
 }
 
-func makeDashboardHandler(cache *weather.Cache) http.HandlerFunc {
+func makeDashboardHandler(provider data.WeatherProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fetchCtx, cancel := context.WithTimeout(r.Context(), weatherFetchTimeout)
 		defer cancel()
 
-		var forecast *weather.Forecast
-		fc, err := cache.Get(fetchCtx)
+		var model *data.WeatherModel
+		m, err := provider.Weather(fetchCtx)
 		if err != nil {
 			slog.Warn("weather fetch failed", "err", err)
 		} else {
-			forecast = &fc
+			model = &m
 		}
 
-		batt := parseBattery(r.URL.Query())
+		q := r.URL.Query()
+		opts := render.Options{
+			Orientation:  parseOrientation(q),
+			Now:          time.Now(),
+			Battery:      parseBattery(q),
+			RainInFooter: q.Get("rain") == "footer",
+		}
 
-		img := render.Dashboard(panelWidth, panelHeight, time.Now(), forecast, batt)
+		img := render.Dashboard(model, opts)
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
 		if err := png.Encode(w, img); err != nil {
 			slog.Error("png encode", "err", err)
 		}
 	}
+}
+
+// parseOrientation reads ?orientation=landscape (anything else ⇒ portrait).
+func parseOrientation(q map[string][]string) render.Orientation {
+	if v := q["orientation"]; len(v) > 0 && strings.EqualFold(v[0], "landscape") {
+		return render.Landscape
+	}
+	return render.Portrait
 }
 
 // parseBattery extracts the optional battery widget params from the

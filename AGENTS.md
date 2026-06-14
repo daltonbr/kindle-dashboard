@@ -14,7 +14,7 @@ A self-hosted family dashboard for an old jailbroken **Kindle 7th gen** (basic t
 | **M2** — Minimal Go server + Dockerfile + CI + GHCR publish | ✅ done, rendering on the panel |
 | **M3** — Weather panel (Open-Meteo) | ✅ done, live on the panel |
 | **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | 🔄 in progress — M4.1/4.2/4.3/4.5 done; M4.4 (healthcheck) + M4.6 (battery/mount) open |
-| **M5** — Composable widgets (2×2 grid, data-layer providers) | 📐 planned — design in `docs/widgets.md`, decision [D16] |
+| **M5** — Composable widgets (2×2 grid, data-layer providers) | 🔄 in progress — seam shipped (three weather cards, demo data layer); real Open-Meteo provider widening pending (M5.3). See `docs/widgets.md`, decisions [D16]/[D17] |
 
 See `docs/roadmap.md` for sub-task breakdowns, and `docs/widgets.md` for the M5 widget architecture.
 
@@ -27,8 +27,11 @@ See `docs/roadmap.md` for sub-task breakdowns, and `docs/widgets.md` for the M5 
 ├── client/
 │   └── refresh.sh           # Kindle-side script (busybox /bin/sh, no bash-isms)
 ├── server/
-│   ├── main.go              # net/http, slog, graceful shutdown
-│   ├── internal/render/     # Dashboard(w, h, now) -> *image.Gray
+│   ├── main.go              # net/http, slog, graceful shutdown, provider wiring
+│   ├── internal/data/       # typed models + providers (WeatherModel, DemoWeather, OpenMeteo)
+│   ├── internal/render/     # Dashboard(model, Options) -> *image.Gray; grid + page chrome
+│   ├── internal/render/widgets/  # Widget interface + WeatherToday/WeatherForecast/Rain
+│   ├── internal/weather/    # Open-Meteo client + TTL cache (M3)
 │   ├── Dockerfile           # multi-stage, FROM scratch, non-root
 │   └── go.mod / go.sum
 ├── .github/workflows/

@@ -44,9 +44,17 @@ M3 will add `internal/weather/` (Open-Meteo client + TTL cache) and embedded TTF
 | --- | --- | --- |
 | `PORT` | `8080` | Listening port inside the container. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. Standard `slog.Level` text. |
-| `WEATHER_LAT` | `50.8225` | Latitude for the Open-Meteo lookup. Default is Brighton, UK. |
-| `WEATHER_LON` | `-0.1372` | Longitude for the Open-Meteo lookup. |
-| `WEATHER_TTL` | `10m` | Any `time.Duration`. The upstream cache TTL; `0` disables caching. |
+| `WEATHER_PROVIDER` | `demo` | `demo` (network-free fixture, the M5 development default) or `openmeteo` (live Open-Meteo client+cache). |
+| `WEATHER_LAT` | `50.8225` | Latitude for the Open-Meteo lookup. Default is Brighton, UK. *(only used when `WEATHER_PROVIDER=openmeteo`)* |
+| `WEATHER_LON` | `-0.1372` | Longitude for the Open-Meteo lookup. *(openmeteo only)* |
+| `WEATHER_TTL` | `10m` | Any `time.Duration`. The upstream cache TTL; `0` disables caching. *(openmeteo only)* |
+
+> **M5 note:** the server currently defaults to `WEATHER_PROVIDER=demo` so the
+> widget layout can be developed against hardcoded data. Set
+> `WEATHER_PROVIDER=openmeteo` for live weather — but note the adapter still maps
+> only the M3 fields (no precip, today-only outlook) until the Open-Meteo client
+> is widened (roadmap M5.3). Switch the deployment default back to `openmeteo`
+> once that lands.
 
 > **Operator TODO:** expose `WEATHER_LAT` / `WEATHER_LON` / `WEATHER_TTL` as variables in the deployment config so they can be tuned without rebuilding the image. Currently relying on the image's built-in Brighton defaults.
 
@@ -66,6 +74,16 @@ The repo is public. The rule (see [D16](decisions.md#d16--widget-data-layer-in-r
 | --- | --- | --- |
 | GET | `/dashboard.png` | Current dashboard, 600×800 8-bit grayscale PNG. `Cache-Control: no-store`. |
 | GET | `/healthz` | `200 OK` body `ok\n`. |
+| GET | `/preview` | HTML preview page wrapping `/dashboard.png`. |
+
+**`/dashboard.png` query params** (all optional):
+
+| Param | Values | Effect |
+| --- | --- | --- |
+| `orientation` | `landscape` | Render 800×600 (default is portrait 600×800). |
+| `rain` | `footer` | Render the rain timeline as the footer strip instead of the bottom 2×1 card. |
+| `batt` | `0`–`100` | Show the battery indicator at that level (absent ⇒ no indicator). |
+| `plug` | `1`/`true` | With `batt`, overlays a charging bolt. |
 
 ## Container image
 

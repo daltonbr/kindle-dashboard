@@ -1,40 +1,43 @@
-// Command render-sample writes a synthetic dashboard PNG to /tmp/sample.png.
-// Useful for iterating on layout/font tweaks without spinning up the HTTP
-// server or redeploying.
+// Command render-sample writes synthetic dashboard PNGs to /tmp so you can
+// iterate on layout/font tweaks without the HTTP server. It renders the demo
+// model in a few configurations (rain-as-card vs rain-in-footer, landscape).
 //
-//	go run ./cmd/render-sample && open /tmp/sample.png
+//	go run ./cmd/render-sample && open /tmp/sample-card.png
 package main
 
 import (
 	"fmt"
+	"image"
 	"image/png"
 	"log"
 	"os"
 	"time"
 
+	"github.com/daltonbr/kindle-dashboard/server/internal/data"
 	"github.com/daltonbr/kindle-dashboard/server/internal/render"
-	"github.com/daltonbr/kindle-dashboard/server/internal/weather"
 )
 
 func main() {
-	now := time.Date(2026, 5, 26, 8, 54, 0, 0, time.UTC)
-	temps := []float64{11, 10, 9, 9, 8, 8, 9, 10, 12, 14, 16, 17, 18, 19, 19, 18, 17, 15, 14, 13, 12, 12, 11, 11}
-	hourly := make([]weather.HourlyReading, len(temps))
-	for i, t := range temps {
-		hourly[i] = weather.HourlyReading{Time: now.Add(time.Duration(i) * time.Hour), TempC: t}
-	}
-	f := &weather.Forecast{
-		Now:       weather.CurrentReading{Time: now, TempC: 13.4, WeatherCode: 3},
-		HighToday: 19.2,
-		LowToday:  8.1,
-		Next24h:   hourly,
-		FetchedAt: now,
-	}
-
+	now := time.Date(2026, 6, 14, 8, 54, 0, 0, time.UTC)
+	model := data.DemoModel(now)
 	batt := &render.Battery{Level: 53, Charging: true}
-	img := render.Dashboard(600, 800, now, f, batt)
 
-	const path = "/tmp/sample.png"
+	samples := []struct {
+		path string
+		opts render.Options
+	}{
+		{"/tmp/sample-portrait.png", render.Options{Orientation: render.Portrait, Now: now, Battery: batt}},
+		{"/tmp/sample-footer.png", render.Options{Orientation: render.Portrait, Now: now, Battery: batt, RainInFooter: true}},
+		{"/tmp/sample-landscape.png", render.Options{Orientation: render.Landscape, Now: now, Battery: batt}},
+	}
+
+	for _, s := range samples {
+		img := render.Dashboard(&model, s.opts)
+		write(s.path, img)
+	}
+}
+
+func write(path string, img image.Image) {
 	out, err := os.Create(path)
 	if err != nil {
 		log.Fatalf("create %s: %v", path, err)

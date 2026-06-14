@@ -1,7 +1,11 @@
 # Widget architecture (M5) — design + plan
 
-Status: **planning / not yet built.** This is the handoff doc for the M5 work.
-Read it cold, then jump to the [step checklist](#next-steps-m5-checklist).
+Status: **building (2026-06-14).** Core seam shipped — three weather cards on a
+filling 2×2 grid, demo data layer, both rain placements. The build is a
+deliberate **redesign**, not the byte-for-byte port this doc originally sketched;
+see [D17](decisions.md#d17--m5-widget-build-redesign-over-byte-for-byte-port-three-weather-cards-on-a-filling-22)
+for what changed and the [step checklist](#next-steps-m5-checklist) for current
+state. The sketches below remain the conceptual intent.
 
 ## Intent
 
@@ -26,8 +30,8 @@ simplest model (everything in this repo, secrets via env) wins.
 
 | Decision | Choice |
 | --- | --- |
-| Grid | **2×2 quadrants + spans.** Footprints: 1×1 (quarter), 2×1 / 1×2 (half), 2×2 (full). |
-| Orientation | **Portrait default (600×800)**; landscape (800×600) supported as a render parameter. Grid is always 2 cols × 2 rows; cell pixel size derives from orientation (portrait cell 300×400, landscape cell 400×300). |
+| Grid | **2×2 quadrants + spans.** Footprints: 1×1 (quarter), 2×1 / 1×2 (half), 2×2 (full). *As built: cells **fill** the area between fixed ~84px header/footer bands rather than being forced square — see [D17](decisions.md#d17--m5-widget-build-redesign-over-byte-for-byte-port-three-weather-cards-on-a-filling-22).* |
+| Orientation | **Portrait default (600×800)**; landscape (800×600) via `?orientation=landscape`. Grid is 2 cols × 2 rows; cell size derives from orientation. 1×1 widgets scale their content to the cell height so landscape's smaller cells don't overflow. |
 | Layout selection | **Single static layout for now.** Multi-layout switching (`?layout=`, time-of-day) deferred until widgets are proven. |
 | Pilot data source | **Weather**, kept as the first widget. Develop against **demo/hardcoded data first**, then wire a real provider. Candidates: keep **Open-Meteo** (no key, already integrated, multi-day forecast) and/or add **OpenWeatherMap** (freemium, API key via env) to exercise the key-based path. |
 | Separation | **In-repo provider interfaces; secrets + personal config via env.** No sidecar, no private module. Public repo is safe because it contains zero secret material — see [D16](decisions.md#d16--widget-data-layer-in-repo-providers-secrets-via-env). |
@@ -129,25 +133,25 @@ Safety practices (see also [server.md → Secret hygiene](server.md#secret-hygie
 Sequenced so each step ends with something runnable, and the two halves
 (render vs data) are testable in isolation.
 
-- [ ] **M5.0 — Widget seam refactor (no behaviour change).** Extract a `Widget`
-      interface from the current `panels.Weather`. Keep today's single
-      full-screen weather layout, but route it through the new grid/`Compose`
-      path. A golden/snapshot test asserts the PNG is byte-for-byte unchanged.
-- [ ] **M5.1 — 2×2 grid + orientation.** Implement footprint→rect mapping for
-      portrait (default) and landscape. Unit-test the rect math for each
-      footprint in both orientations. Add `?orientation=landscape` to the
-      handler (portrait default).
-- [ ] **M5.2 — Data layer + demo provider.** Define `WeatherModel` +
-      `WeatherProvider`; add `DemoWeather` (hardcoded). Re-point the weather
-      widget at the provider. Widget now renders with zero network — the
-      "develop the halves separately" milestone.
-- [ ] **M5.3 — Real weather provider behind the seam.** Wrap existing
-      Open-Meteo as `OpenMeteoWeather`; optionally add `OpenWeatherMap`
-      (key via env). Provider selected by config; falls back to demo/unavailable
-      when unconfigured. No widget/grid changes.
-- [ ] **M5.4 — Second widget (proves composition).** Add one more widget in a
-      different cell (candidate: a clock/date widget, or a placeholder) so the
-      2×2 grid is exercised with >1 widget.
+- [x] ~~**M5.0 — Widget seam refactor (no behaviour change).**~~ **Dropped** in
+      favour of a redesign ([D17](decisions.md#d17--m5-widget-build-redesign-over-byte-for-byte-port-three-weather-cards-on-a-filling-22)).
+      No PNG-parity golden; structural tests instead.
+- [x] **M5.1 — 2×2 grid + orientation.** `internal/render/grid.go` does
+      footprint→rect over filling cells with fixed header/footer bands;
+      `?orientation=landscape` (portrait default). Rect math unit-tested
+      (`grid_test.go`).
+- [x] **M5.2 — Data layer + demo provider.** `internal/data` defines
+      `WeatherModel` + `WeatherProvider`; `DemoWeather` is hardcoded and is the
+      default provider during M5. Widgets render with zero network.
+- [~] **M5.3 — Real weather provider behind the seam.** `data.OpenMeteo` adapter
+      wraps the existing client+cache (`WEATHER_PROVIDER=openmeteo`). **TODO:** it
+      maps only the M3 fields — widen the Open-Meteo client to fetch precip
+      probability/amount + a 3-day daily block, then make it the default.
+      `OpenWeatherMap` (env key) still optional.
+- [x] **M5.4 — Composition proven.** Three widgets across the grid:
+      `WeatherToday` (1×1), `WeatherForecast` (1×1), `Rain` (2×1). The `Rain`
+      renderer is rect-agnostic — also rendable in the footer via `?rain=footer`.
+      A non-weather widget (clock/date) is still open if wanted.
 - [ ] **M5.5 — (deferred) First private source.** Calendar or Home Assistant,
       behind the same provider interface; keys/tokens + personal IDs via env,
       documented with placeholders in `server.md`. Add a `gitleaks` CI guard

@@ -366,3 +366,47 @@ sidecar" service and no private Go module. Full design in
 **Revisit when:** native iOS/macOS widgets become a real goal (→ reconsider the
 sidecar/JSON data layer), or a provider needs config too rich/personal to keep
 comfortably in env (→ reconsider going private).
+
+## D17 — M5 widget build: redesign over byte-for-byte port; three weather cards on a filling 2×2
+
+**Decision (2026-06-14):** The M5 widget work **redesigns** the dashboard rather
+than porting the M3 full-screen layout unchanged. The originally-planned M5.0
+"byte-for-byte golden" parity step is **dropped**. The new layout is:
+
+- A **2×2 grid** of cells that **fill** the area between fixed ~84px header and
+  footer bands (cells are *not* forced square — filling the middle avoids the
+  wasted band space that square cells produced). A 3×2 variant was prototyped
+  and rejected: with only three widgets it just narrowed the cells without
+  earning the extra column.
+- **Three weather cards**: `WeatherToday` (1×1), `WeatherForecast` (1×1, 3-day),
+  and `Rain` (2×1, hourly precip-probability timeline spanning the bottom row).
+- **Header** keeps date + battery; **footer** keeps "updated" + repo credit. The
+  **outer page border was removed** (footer/tick text was colliding with it).
+- The `Rain` widget renderer is **rect-agnostic**: the same widget renders as the
+  bottom 2×1 card or, via `?rain=footer`, as the footer strip — so we can choose
+  the placement later without a rewrite.
+- The data layer (`data.WeatherModel` + `data.WeatherProvider`) is defined **up
+  front** (not deferred), with precip fields the rain card needs. Default
+  provider is `DemoWeather` (network-free) during widget development;
+  `WEATHER_PROVIDER=openmeteo` selects the live `data.OpenMeteo` adapter.
+
+**Why:**
+
+- The user's goal was a *simpler, more legible* wall display, not preservation of
+  the M3 composition — so a parity gate would have locked in the thing we wanted
+  to change. Tests assert structure (grid tiling, widget ink, model shape)
+  instead.
+- Filling cells + slim bands directly answers the "unused space" problem that
+  square cells + symmetric bands created.
+- Defining the model early makes the provider seam the real deliverable; widgets
+  develop against demo data with zero network (the D16 intent).
+
+**Legibility:** content text has a readability floor (~20px+); 1×1 widgets scale
+their offsets/fonts to the cell height so smaller (landscape) cells don't
+overflow. The big current temperature is the headline (~78px in portrait).
+
+**Follow-up (roadmap M5.3):** the `OpenMeteo` adapter currently maps only what
+the M3 client fetches (current, today hi/lo, hourly temps) — it leaves precip at
+zero and the outlook at one day. Widen the Open-Meteo client to request
+`precipitation_probability` + `precipitation` and a 3-day daily block before the
+real provider becomes the default.

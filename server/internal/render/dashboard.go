@@ -1,6 +1,7 @@
-// Package render composes the dashboard image. It owns the page-level layout
-// (header, footer, panel placement) and delegates per-card drawing to
-// internal/render/panels.
+// Package render composes the dashboard image. It owns the page-level chrome
+// (border, header, footer) and the grid that places widgets; per-card drawing
+// lives in internal/render/widgets, and the data behind each card comes from
+// internal/data. See docs/widgets.md.
 package render
 
 import (
@@ -13,52 +14,85 @@ import (
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 
+	"github.com/daltonbr/kindle-dashboard/server/internal/data"
 	"github.com/daltonbr/kindle-dashboard/server/internal/render/fonts"
-	"github.com/daltonbr/kindle-dashboard/server/internal/render/panels"
-	"github.com/daltonbr/kindle-dashboard/server/internal/weather"
+	"github.com/daltonbr/kindle-dashboard/server/internal/render/widgets"
 )
 
-// Battery describes the device's power state for the optional top-right
-// widget. Pass nil to omit the widget entirely.
+// Battery describes the device's power state for the header widget. Pass nil to
+// omit it entirely.
 type Battery struct {
 	Level    int  // 0–100; clamped on render.
 	Charging bool // true ⇒ a charging glyph overlays the fill.
 }
 
-// Dashboard renders a w×h 8-bit grayscale image for the eink panel.
-// Pass forecast=nil to render the "weather unavailable" state.
-// Pass batt=nil to omit the battery widget.
-func Dashboard(w, h int, now time.Time, forecast *weather.Forecast, batt *Battery) *image.Gray {
-	img := image.NewGray(image.Rect(0, 0, w, h))
+// Options controls how a dashboard frame is composed.
+type Options struct {
+	Orientation  Orientation
+	Now          time.Time
+	Battery      *Battery // nil ⇒ no battery indicator
+	RainInFooter bool     // true ⇒ rain renders as the footer strip; false ⇒ as the bottom 2×1 card
+}
+
+// Dashboard composes a full dashboard frame. Pass model=nil to render the
+// "weather unavailable" state.
+//
+// Layout (portrait): a square 2×2 grid between equal header/footer bands.
+//   - top-left:  today  (1×1)   top-right: forecast (1×1)
+//   - bottom:    rain    (2×1)   — unless RainInFooter, then the footer holds it
+func Dashboard(model *data.WeatherModel, opts Options) *image.Gray {
+	g := NewGrid(opts.Orientation, 2, 2)
+
+	img := image.NewGray(image.Rect(0, 0, g.W, g.H))
 	fill(img, img.Bounds(), 255)
 
-	// Single thin border — calmer than M2's double border now that we have real type.
-	strokeRect(img, image.Rect(8, 8, w-8, h-8), 0)
+	drawHeader(img, g, opts)
 
-	headerFace := fonts.Face(28)
-	dateFace := fonts.Face(28)
-	timeFace := fonts.Face(18)
-	footerFace := fonts.Face(16)
-	drawAt(img, headerFace, "Kindle Dashboard", 30, 50, 0)
-	drawAt(img, dateFace, now.Format("Mon 2 Jan"), 30, 88, 0)
-	drawAt(img, timeFace, fmt.Sprintf("updated %s", now.Format("15:04")), 30, 110, 80)
-
-	if batt != nil {
-		// Right-aligned to mirror the left-aligned date row.
-		drawBattery(img, image.Rect(0, 64, w-30, 92), *batt)
+	if model == nil {
+		hr := g.HeaderRect()
+		drawAt(img, fonts.Face(30), "Weather unavailable", hr.Min.X, g.Origin.Y+g.CellH, 0)
+		drawFooterCredit(img, g, opts, false)
+		return img
 	}
 
-	weatherArea := image.Rect(20, 130, w-20, h-50)
-	if forecast != nil {
-		panels.Weather(img, weatherArea, *forecast)
+	m := *model
+	widgets.WeatherToday{M: m}.Render(img, g.CellRect(0, 0, 1, 1))
+	widgets.WeatherForecast{M: m}.Render(img, g.CellRect(1, 0, 1, 1))
+
+	rain := widgets.Rain{Hours: m.Hourly}
+	if opts.RainInFooter {
+		rain.Render(img, g.FooterRect()) // bottom grid row left empty for a future widget
 	} else {
-		drawAt(img, fonts.Face(24), "Weather: (unavailable)",
-			weatherArea.Min.X+20, weatherArea.Min.Y+40, 0)
+		rain.Render(img, g.CellRect(0, 1, 2, 1)) // span the full bottom row
 	}
-
-	drawAt(img, footerFace, "kindle-dashboard · github.com/daltonbr", 30, h-20, 100)
+	drawFooterCredit(img, g, opts, opts.RainInFooter)
 
 	return img
+}
+
+// drawHeader paints the date on the left and the optional battery on the right,
+// vertically centred in the header band with a large, readable date.
+func drawHeader(img *image.Gray, g Grid, opts Options) {
+	hr := g.HeaderRect()
+	baseY := (hr.Min.Y+hr.Max.Y)/2 + 12
+
+	drawAt(img, fonts.Face(34), opts.Now.Format("Mon 2 Jan"), hr.Min.X+4, baseY, 0)
+
+	if opts.Battery != nil {
+		drawBattery(img, image.Rect(0, baseY-28, hr.Max.X, baseY), *opts.Battery)
+	}
+}
+
+// drawFooterCredit draws the footer text. When the footer band is occupied by
+// the rain strip (rainInFooter), there is no room for text, so this is a no-op.
+func drawFooterCredit(img *image.Gray, g Grid, opts Options, rainInFooter bool) {
+	if rainInFooter {
+		return
+	}
+	fr := g.FooterRect()
+	baseY := (fr.Min.Y+fr.Max.Y)/2 + 8
+	drawAt(img, fonts.Face(20), fmt.Sprintf("updated %s", opts.Now.Format("15:04")), fr.Min.X+4, baseY, 60)
+	drawRight(img, fonts.Face(20), "github.com/daltonbr/kindle-dashboard", fr.Max.X-4, baseY, 60)
 }
 
 // drawBattery paints an icon + percent number whose right edge sits at
@@ -67,13 +101,13 @@ func Dashboard(w, h int, now time.Time, forecast *weather.Forecast, batt *Batter
 func drawBattery(img *image.Gray, area image.Rectangle, b Battery) {
 	level := min(max(b.Level, 0), 100)
 
-	numberFace := fonts.Face(24)
+	numberFace := fonts.Face(28)
 	label := fmt.Sprintf("%d%%", level)
 	labelWidth := fontMeasure(numberFace, label)
 
 	const (
-		iconW    = 44
-		iconH    = 22
+		iconW    = 48
+		iconH    = 24
 		notchW   = 4
 		notchH   = 10
 		padInner = 3
@@ -90,10 +124,7 @@ func drawBattery(img *image.Gray, area image.Rectangle, b Battery) {
 	}
 	iconLeft := iconRight - (iconW + notchW)
 	// Sit the icon so its vertical midpoint matches the digits' optical centre.
-	// Atkinson Hyperlegible at 24pt has ~17px of cap height; visual centre of
-	// the digits is roughly baseline - 8. Centring iconH there gives iconTop
-	// = baseline - 8 - iconH/2.
-	iconTop := area.Max.Y - 8 - iconH/2
+	iconTop := area.Max.Y - 10 - iconH/2
 	iconBot := iconTop + iconH
 
 	body := image.Rect(iconLeft, iconTop, iconLeft+iconW, iconBot)
@@ -114,8 +145,6 @@ func drawBattery(img *image.Gray, area image.Rectangle, b Battery) {
 	}
 
 	if b.Charging {
-		// Standalone bolt between icon and number, in black over white. Sits
-		// on its own background so it reads at any battery level.
 		boltCX := iconRight + (boltSlot / 2) + 1
 		boltCY := (iconTop + iconBot) / 2
 		drawBolt(img, boltCX, boltCY)
@@ -125,10 +154,7 @@ func drawBattery(img *image.Gray, area image.Rectangle, b Battery) {
 }
 
 // boltMask is a hand-drawn pixel bitmap for the charging indicator. Each '#'
-// is a black pixel; '.' is left transparent. Polygon rasterisation at this
-// scale (~10px wide) was too unreliable — boundary pixels at integer
-// coordinates dropped or doubled unpredictably — so we just draw the shape
-// directly. Tweak the mask freely; drawBolt centres it on (cx, cy).
+// is a black pixel; '.' is left transparent.
 var boltMask = []string{
 	".........#",
 	"........##",
@@ -197,4 +223,9 @@ func drawAt(img *image.Gray, face font.Face, s string, x, y int, gray uint8) {
 		Dot:  fixed.P(x, y),
 	}
 	d.DrawString(s)
+}
+
+func drawRight(img *image.Gray, face font.Face, s string, rx, y int, gray uint8) {
+	w := font.MeasureString(face, s).Round()
+	drawAt(img, face, s, rx-w, y, gray)
 }

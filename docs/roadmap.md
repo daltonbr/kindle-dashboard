@@ -160,12 +160,30 @@ Tested on 2026-05-26 via `ssh kindle /sbin/reboot`. The daemon **does** survive 
 
 Full design + rationale in [widgets.md](widgets.md); separation/safety decision in [D16](decisions.md#d16--widget-data-layer-in-repo-providers-secrets-via-env). Move from one hard-coded layout to small widgets on a **2×2 grid + spans** (portrait default, landscape supported), with a typed **data layer** behind per-domain provider interfaces. Integration code stays in this public repo; secrets + personal config live only in the deployment env. Native iOS/macOS widgets are a **non-goal**. Single static layout for now.
 
-- [ ] **M5.0** — Widget seam refactor from `panels.Weather`, no behaviour change (golden test asserts identical PNG).
-- [ ] **M5.1** — 2×2 grid + orientation (footprint→rect math, `?orientation=landscape`, portrait default).
-- [ ] **M5.2** — Data layer + `DemoWeather` provider (widget renders with zero network).
-- [ ] **M5.3** — Real weather provider behind the seam (Open-Meteo; optional OpenWeatherMap via env key).
-- [ ] **M5.4** — Second widget to exercise composition (clock/date or placeholder).
-- [ ] **M5.5** — (deferred) First private source (Calendar or Home Assistant); add `gitleaks` CI guard first.
+Reshaped on 2026-06-14 (see [D17](decisions.md#d17--m5-widget-build-redesign-over-byte-for-byte-port-three-weather-cards-on-a-filling-22)): the
+build is a **redesign**, not a byte-for-byte port — three weather cards on a
+filling 2×2 grid, developed against demo data first.
+
+- [x] ~~**M5.0** — Widget seam refactor, no behaviour change (golden test).~~
+      **Dropped** — replaced by a deliberate redesign (D17). Tests assert
+      structure (grid tiling, widget ink, model shape) rather than PNG parity.
+- [x] **M5.1** — 2×2 grid + orientation. `internal/render/grid.go`
+      (footprint→rect, filling cells, fixed header/footer bands);
+      `?orientation=landscape`, portrait default. Rect math unit-tested.
+- [x] **M5.2** — Data layer + `DemoWeather`. `internal/data` defines
+      `WeatherModel`/`WeatherProvider` (incl. precip fields) + `DemoWeather`;
+      widgets render with zero network. Demo is the default provider during M5.
+- [~] **M5.3** — Real weather provider behind the seam. `data.OpenMeteo` adapter
+      exists (`WEATHER_PROVIDER=openmeteo`) but maps only the M3 fields; **TODO:**
+      widen the Open-Meteo client to fetch `precipitation_probability` +
+      `precipitation` and a 3-day daily block, then make it the default.
+      OpenWeatherMap (env key path) still optional.
+- [x] **M5.4** — Composition exercised with three widgets: `WeatherToday` (1×1),
+      `WeatherForecast` (1×1), `Rain` (2×1, rect-agnostic — also rendable in the
+      footer via `?rain=footer`). A distinct non-weather widget (clock/date) is
+      still open if we want one.
+- [ ] **M5.5** — (deferred) First private source (Calendar or Home Assistant);
+      add `gitleaks` CI guard first.
 
 ---
 
