@@ -24,13 +24,18 @@ type CalendarAgenda struct {
 // maxTitleLines bounds how tall a single event's title may grow.
 const maxTitleLines = 2
 
+// defaultAgendaEvents is the agenda's default event cap. CalendarMonth reads it
+// so its "later" footer can skip exactly what the agenda already shows, letting
+// the two tiles complement rather than duplicate each other.
+const defaultAgendaEvents = 3
+
 func (CalendarAgenda) Footprint() (cols, rows int) { return 1, 1 }
 
 func (w CalendarAgenda) Render(dst *image.Gray, area image.Rectangle) {
 	const pad = 16
 	n := w.Max
 	if n == 0 {
-		n = 3
+		n = defaultAgendaEvents
 	}
 
 	s := vscale(area)

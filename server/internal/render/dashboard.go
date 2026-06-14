@@ -41,8 +41,8 @@ type Options struct {
 // Layout (portrait): a square 2×2 grid between equal header/footer bands.
 //   - top-left:  today  (1×1)   top-right: forecast (1×1)
 //   - bottom:    rain    (2×1)   — unless RainInFooter, then the footer holds it
-//     and the bottom row frees up: bottom-left → agenda (when Calendar is set),
-//     bottom-right reserved for a future widget.
+//     and the bottom row frees up: bottom-left → agenda, bottom-right → rolling
+//     month grid (both when Calendar is set).
 func Dashboard(model *data.WeatherModel, opts Options) *image.Gray {
 	g := NewGrid(opts.Orientation, 2, 2)
 
@@ -75,14 +75,16 @@ func Dashboard(model *data.WeatherModel, opts Options) *image.Gray {
 	return img
 }
 
-// drawAgenda places the agenda card in the bottom-left cell. It only renders
-// when a calendar model is present and the bottom grid row is free (rain moved
-// to the footer); with rain occupying the bottom 2×1 card there is no room.
+// drawAgenda places the two calendar cards on the bottom grid row: the agenda
+// ("what's next") bottom-left and the rolling month grid bottom-right. They
+// only render when a calendar model is present and the bottom row is free (rain
+// moved to the footer); with rain occupying the bottom 2×1 card there is no room.
 func drawAgenda(img *image.Gray, g Grid, opts Options) {
 	if opts.Calendar == nil || !opts.RainInFooter {
 		return
 	}
 	widgets.CalendarAgenda{M: *opts.Calendar, Now: opts.Now}.Render(img, g.CellRect(0, 1, 1, 1))
+	widgets.CalendarMonth{M: *opts.Calendar, Now: opts.Now}.Render(img, g.CellRect(1, 1, 1, 1))
 }
 
 // drawHeader paints the date on the left and the optional battery on the right,

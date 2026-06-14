@@ -2,18 +2,19 @@
 
 Milestones, roughly in order. Each one ends with a working, demonstrable thing — no half-states.
 
-> **Current status (2026-06-14): M6 (Calendar) shipped + deployed.** All M6 code
-> (M6.0–M6.4) is merged and the new GHCR image is live on the wall panel — the
-> operator redeployed and confirmed the agenda card renders from the real
-> Google Calendar secret iCal feed. Soak/monitoring underway for a few days to
-> catch real-feed recurrence/timezone edge cases (D20 lists known gaps).
+> **Current status (2026-06-14): M6 (Calendar) shipped + deployed; M6.5
+> (two-line titles) live; M7 (rolling month tile) code-complete.** The agenda
+> renders from the real Google Calendar secret iCal feed, titles wrap to two
+> lines and strip unrenderable glyphs (M6.5, deployed + verified), and the
+> bottom-right cell now holds a rolling month grid that complements the agenda
+> (M7 — code-complete, **deploy + verify pending**).
 >
 > **M4.6 (battery/mount) is deferred** — deprioritized by the operator
 > (2026-06-14); it's hardware-led and not blocking. The rest of M4 is done (D15
 > cadence live, M4.4 healthcheck shipped).
 >
-> **Next coding milestone: not yet chosen** — pick from the post-M4 ideas once the
-> M6 soak looks clean.
+> **Next coding milestone: not yet chosen** — pick from the post-M4 ideas after
+> M7 is verified on the panel.
 
 ## M0 — Repo bootstrap ✅
 
@@ -292,6 +293,33 @@ without config:
 > secret/personal — env only, never committed, never in the image (it stays
 > `FROM scratch`). The real deployment value lives in the homelab config, not
 > the repo.
+
+---
+
+## M7 — Rolling month tile
+
+Goal: fill the last empty grid cell (bottom-right) and give the calendar a
+spatial companion to the agenda's chronological list. Reuses the existing
+`CalendarModel` — no new provider, secret, or `gitleaks` surface; pure render
+layer.
+
+- [x] **M7.0 — `CalendarMonth` widget.** ✅ 1×1 rolling grid in the bottom-right
+      cell: Monday-first, starting on the current week, `Weeks` rows (default 4 =
+      28 days). Today is highlighted with a filled chip + white number; past days
+      are dimmed; days with an event get a dot (start-day, in `now`'s location).
+      Header is the month name, or a spanning `Jan – Feb` form when the weeks
+      straddle a boundary.
+- [x] **M7.1 — "Later" footer complements the agenda.** ✅ Below the grid, a
+      short list shows the next events *beyond* the agenda's window. Both tiles
+      read the same model; the agenda shows `Upcoming(now, defaultAgendaEvents)`
+      and the month footer shows the next ~2 after that (shared
+      `defaultAgendaEvents` constant), so they complement rather than duplicate.
+      Titles reuse the agenda's `sanitizeTitle`/`truncateToWidth`.
+- [x] **M7.2 — Wire + place.** ✅ `drawAgenda` now also renders `CalendarMonth`
+      in `CellRect(1, 1, 1, 1)` under the same condition as the agenda
+      (Calendar set + rain in footer). Unit-tested (later-tail selection, empty
+      tail, event-day set, ink/empty render). **Deploy + verify on the panel
+      pending.**
 
 ---
 
