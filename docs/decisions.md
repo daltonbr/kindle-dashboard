@@ -410,3 +410,39 @@ the M3 client fetches (current, today hi/lo, hourly temps) — it leaves precip 
 zero and the outlook at one day. Widen the Open-Meteo client to request
 `precipitation_probability` + `precipitation` and a 3-day daily block before the
 real provider becomes the default.
+
+---
+
+## D18 — Secret-scan CI guard: gitleaks
+
+**Decision (M6.0):** A `gitleaks` job runs in CI (`.github/workflows/ci.yml`)
+before any secret-handling code lands. It scans the full git history on pushes to
+`main` and the diff on pull requests, failing the build if a credential pattern
+is detected. Uses the upstream `gitleaks/gitleaks-action@v2` with gitleaks' stock
+ruleset (no custom `.gitleaks.toml`). This is the guard promised in
+[D16](#d16--widget-data-layer-in-repo-providers-secrets-via-env) ahead of the
+first private source (M6 — Calendar).
+
+**Why:**
+
+- **Defence in depth for a public repo.** GitHub's own push protection + secret
+  scanning (already on) catch *known* provider token shapes; gitleaks adds a
+  second, config-as-code net that runs the same way locally (`gitleaks detect`)
+  and in CI, and catches generic high-entropy/`*_URL`-with-token patterns the
+  calendar feed (M6.1, a secret iCal URL) falls under.
+- **Free + zero-maintenance here.** `gitleaks-action@v2` is free for public
+  repos and individual accounts (no `GITLEAKS_LICENSE` needed); the stock
+  ruleset is enough until we have a real false-positive to suppress, at which
+  point a `.gitleaks.toml` gets added with rationale.
+- **Pre-commit, not just CI.** A local hint (`gitleaks protect --staged` as a
+  pre-commit hook, or `gitleaks git` before pushing) is documented in
+  [server.md → Secret hygiene](server.md#secret-hygiene--config-public-repo) so
+  a leak is caught before it ever reaches a commit. Not enforced — the CI job is
+  the backstop.
+
+**Rejected alternatives:**
+
+- **GitHub push protection alone.** Provider-specific; would not reliably flag a
+  bespoke `CALENDAR_ICS_URL` carrying a private token.
+- **trufflehog.** Comparable; gitleaks' single static binary + TOML config and
+  the drop-in Action made it the lower-friction choice for a solo repo.

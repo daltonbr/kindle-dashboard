@@ -8,9 +8,9 @@ Milestones, roughly in order. Each one ends with a working, demonstrable thing �
 > battery/mount** (hardware-led: power delivery at the mount + a clean
 > drain-slope read; the device runs mostly on battery and has hit 4%).
 >
-> **Next coding milestone: M6 — Calendar (first private source).** Start with the
-> `gitleaks` guard (M6.0), then build the agenda widget behind the data seam.
-> See the M6 section below.
+> **Next coding milestone: M6 — Calendar (first private source).** M6.0 (the
+> `gitleaks` CI guard) is done; next is **M6.1 — auth approach + data model**
+> (leaning toward a Google Calendar secret iCal URL). See the M6 section below.
 
 ## M0 — Repo bootstrap ✅
 
@@ -231,9 +231,12 @@ bottom-left grid cell (the one freed when rain renders in the footer). Decided
 Sequenced so each step ends runnable and the secret path is provably inert
 without config:
 
-- [ ] **M6.0 — `gitleaks` CI guard (prerequisite).** Add a gitleaks scan to CI
-      (and a pre-commit hint) before any secret-handling code lands. Brief
-      `decisions.md` entry for the tool choice.
+- [x] **M6.0 — `gitleaks` CI guard (prerequisite).** ✅ `secrets` job in
+      `ci.yml` runs `gitleaks/gitleaks-action@v2` (full history on push, diff on
+      PR); local pre-commit/pre-push hint documented in
+      [server.md → Secret hygiene](server.md#secret-hygiene--config-public-repo).
+      Tool choice recorded in [D18](decisions.md#d18--secret-scan-ci-guard-gitleaks).
+      Verified clean locally (`gitleaks git`, 48 commits, no leaks).
 - [ ] **M6.1 — Auth approach + data model.** Decide how to read the calendar.
       **Leaning:** a Google Calendar **secret iCal URL** (single secret env var,
       read-only, no OAuth dance) over CalDAV/OAuth — record as a `decisions.md`

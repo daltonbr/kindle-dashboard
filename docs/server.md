@@ -66,7 +66,13 @@ The repo is public. The rule (see [D16](decisions.md#d16--widget-data-layer-in-r
 - **Secrets and personal config come from the environment only** — env vars or a host-only mounted file. Never committed; never baked into the image (it stays `FROM scratch`, binary only — secrets enter at `docker run` time via `--env-file`).
 - **This doc lists vars with placeholder values only.** Never paste a real key/token/ID here.
 - **Providers are inert without config** — a provider whose env vars are unset returns an error (the widget renders "unavailable") or falls back to a `Demo*` source. A clone of the repo with no config does nothing private, and CI/forks run clean.
-- **Guards:** enable GitHub secret scanning + push protection (free on public repos) in repo settings; add a `gitleaks` CI step / pre-commit hook before the first private provider (roadmap M5.5).
+- **Guards:** GitHub secret scanning + push protection (free on public repos) are on in repo settings, and a `gitleaks` job runs in CI on every push/PR ([D18](decisions.md#d18--secret-scan-ci-guard-gitleaks)). To catch a leak *before* it commits, scan locally first:
+  ```sh
+  # one-off, before pushing — scans the working tree + history
+  gitleaks git --no-banner .
+  # or wire it as a pre-commit hook (scans only staged changes)
+  gitleaks protect --staged --no-banner
+  ```
 - Privacy is **not** the security mechanism — these practices apply whether or not the repo is public.
 
 ## Endpoints
