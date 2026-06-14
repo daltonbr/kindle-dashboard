@@ -583,3 +583,43 @@ stalls, then restored to `INTERVAL=600`.
 **Revisit when:** powerd's autonomous suspend/screensaver behaviour causes other
 interference — at which point consider stopping or muzzling powerd directly
 (e.g. `lipc-set-prop` to prevent its screensaver) rather than only racing it.
+
+## D22 — `suspend_for()` verifies the suspend stuck; falls back to userspace sleep (amends D21)
+
+**Decision:** `suspend_for()` measures wall-clock across `echo mem`. If it
+returns in fewer than `SUSPEND_STUCK_MIN` seconds (default 10) the suspend was
+aborted, so the daemon waits out the **remainder in a userspace `sleep`** rather
+than returning to the main loop. It also performs the kernel `wakeup_count`
+handshake before suspending. Every legitimate suspend in this daemon is hundreds
+of seconds, so the threshold cleanly separates "stuck" from "bounced out".
+
+**Why:** Later on 2026-06-14, after D21 shipped, the battery drained ~10%/hr
+(>50% in an afternoon) versus the usual week-plus. The device was hot-spinning:
+RTC armed for 600 s, `echo mem` returning in ~2 s, then a full Wi-Fi nudge +
+`curl` + `eips` redraw every ~19 s, around the clock. Root cause: **a connected
+USB cable blocks deep suspend on this device** — `echo mem` reports success but
+the SoC never stays down. Diagnosis on the device: `max77696-charger
+type=USB_CDP online=1`, `max77696-eh`(Mains)` online=0`, `isCharging=0` while the
+battery fell. D21 had (correctly) removed the long userspace `sleep` that, as a
+side effect, used to throttle this aborted-suspend case to one cycle per
+interval; without it, an un-stickable suspend hot-spins.
+
+The freeze (D21) and the hot-spin (D22) are **mutually exclusive**: the freeze
+needs a real suspend to happen under a userspace sleep; the hot-spin happens
+precisely because no suspend can happen. So once we detect the suspend didn't
+stick, a userspace `sleep` for the remainder is freeze-safe — nothing can
+suspend us mid-count — and is far cheaper than re-fetching immediately.
+
+**Verified:** redeployed and restarted on the panel 2026-06-14 21:47; first
+cycle logged `armed wakealarm for 600s` → `suspend did not stick (2s); USB
+likely connected — userspace sleep 598s`. Hot-spin stopped; cadence back to one
+refresh per interval.
+
+**Note — this is a software mitigation, not the cure.** While USB is connected
+the device cannot deep-suspend at all, so even paced correctly it will not
+reach the week-plus battery life that depends on suspending ~99% of the time.
+The actual fix is hardware/power-delivery (deferred **M4.6**): power the mount
+from a real **Mains** charger (would show `max77696-eh online=1`,
+`isCharging=1`) so being awake doesn't matter — or run unplugged on battery so
+deep suspend works. The failure state to avoid is the current one: plugged into
+a `USB_CDP` data port that blocks suspend *and* doesn't charge.

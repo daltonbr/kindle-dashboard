@@ -61,6 +61,15 @@ export PATH
 # Which RTC to use for the wake alarm. rtc1 = max77696-rtc.1 (PMIC channel 1).
 : "${RTC:=/sys/class/rtc/rtc1}"
 
+# If `echo mem` returns in fewer than this many seconds, the suspend did not
+# stick (it was aborted by an asserted wake source — on this device that's
+# almost always a connected USB cable, which blocks deep suspend). Used by
+# suspend_for() to detect the aborted-suspend case and pace the remainder in a
+# userspace sleep instead of hot-spinning a full fetch+redraw loop. Every
+# legitimate suspend in this daemon is hundreds of seconds, so 10 cleanly
+# separates "stuck" from "bounced straight back out". See [D22].
+: "${SUSPEND_STUCK_MIN:=10}"
+
 # CPU governor to set at boot. "powersave" pegs the i.MX 6SoloLite at
 # 396 MHz; "ondemand" is the firmware default.
 : "${GOVERNOR:=powersave}"
@@ -214,30 +223,64 @@ draw() {
 }
 
 suspend_for() {
-    # Suspend to mem for $1 seconds, woken by the RTC alarm. This is the ONLY
-    # safe way for the daemon to idle: a plain userspace `sleep` uses
-    # CLOCK_MONOTONIC (busybox nanosleep), which does NOT advance while the
-    # device is suspended. powerd (still running — we only stop framework and
-    # lab126_gui) idle-suspends the panel after a few minutes, so any userspace
-    # sleep longer than powerd's idle timeout freezes mid-count and never
-    # returns. That stalled the whole loop for ~8h on 2026-06-14. Arming the
-    # RTC + `echo mem` keeps the suspend under our control and guarantees a wake.
+    # Idle for $1 seconds, preferring a real RTC-woken suspend but degrading
+    # gracefully when the device refuses to suspend.
+    #
+    # The hard constraint: a plain userspace `sleep` uses CLOCK_MONOTONIC
+    # (busybox nanosleep), which does NOT advance while the device is
+    # suspended. powerd (still running — we only stop framework and
+    # lab126_gui) idle-suspends after a few minutes, so a userspace sleep that
+    # outlasts powerd's idle timer freezes mid-count if a real suspend happens
+    # under it. That stalled the loop for ~8h on 2026-06-14 [D21].
+    #
+    # The complementary failure (2026-06-14, [D22]): when a USB cable is
+    # connected the device CANNOT enter deep suspend at all — `echo mem`
+    # returns in ~1s. Blindly trusting it turned the loop into a hot-spin
+    # (full fetch + eips + Wi-Fi nudge every ~19s) that drained ~10%/hr.
+    #
+    # The two failures are mutually exclusive: the freeze needs a real suspend
+    # to happen under the sleep; the hot-spin happens precisely because no
+    # suspend can happen. So: try the real suspend; if it didn't stick, the
+    # remainder is safe to wait out in a userspace sleep (nothing can suspend
+    # us mid-count) — and that's far cheaper than re-fetching immediately.
     secs=$1
+    [ "$secs" -gt 0 ] || return 0
     now=$(date +%s)
-    if [ -w "$RTC/wakealarm" ]; then
-        echo 0 > "$RTC/wakealarm" 2>/dev/null || true
-        echo $(( now + secs )) > "$RTC/wakealarm" 2>/dev/null || log "wakealarm: failed to arm"
-        log "armed wakealarm for ${secs}s"
-    else
-        log "wakealarm: $RTC/wakealarm not writable — sleeping with plain sleep"
+
+    if [ ! -w "$RTC/wakealarm" ] || [ ! -w /sys/power/state ]; then
+        # Can't arm the alarm or can't suspend — pace in userspace. Safe: if a
+        # real suspend is impossible here, powerd can't suspend us mid-sleep.
+        log "suspend unavailable — userspace sleep ${secs}s"
         sleep "$secs"
         return
     fi
-    if [ -w /sys/power/state ]; then
-        echo mem > /sys/power/state 2>/dev/null \
-            || { log "suspend failed; sleeping ${secs}s in userspace"; sleep "$secs"; }
-    else
-        sleep "$secs"
+
+    echo 0 > "$RTC/wakealarm" 2>/dev/null || true
+    echo $(( now + secs )) > "$RTC/wakealarm" 2>/dev/null || log "wakealarm: failed to arm"
+    log "armed wakealarm for ${secs}s"
+
+    # wakeup_count handshake (kernel's documented pattern): echo the current
+    # count back before suspending so a wake event that arrived in the gap
+    # aborts the write cleanly instead of letting us enter and immediately
+    # bounce out. Best-effort — not all aborts are caught this way.
+    if [ -r /sys/power/wakeup_count ]; then
+        wc=$(cat /sys/power/wakeup_count 2>/dev/null)
+        [ -n "$wc" ] && echo "$wc" > /sys/power/wakeup_count 2>/dev/null
+    fi
+
+    t0=$(date +%s)
+    echo mem > /sys/power/state 2>/dev/null || log "echo mem: write rejected"
+    slept=$(( $(date +%s) - t0 ))
+
+    # Did the suspend stick? If `echo mem` returned far earlier than the alarm,
+    # it was aborted (USB connected / wake source asserted). Wait out the
+    # remainder in userspace rather than returning to hot-spin the fetch loop.
+    if [ "$slept" -lt "$SUSPEND_STUCK_MIN" ]; then
+        remainder=$(( secs - slept ))
+        if [ "$remainder" -gt 0 ]; then
+            log "suspend did not stick (${slept}s); USB likely connected — userspace sleep ${remainder}s"
+            sleep "$remainder"
+        fi
     fi
 }
 
