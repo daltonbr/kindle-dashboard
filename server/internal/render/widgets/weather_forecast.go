@@ -31,7 +31,7 @@ func (w WeatherForecast) Render(dst *image.Gray, area image.Rectangle) {
 	fs := func(px float64) float64 { return px * s }
 
 	labelY := area.Min.Y + int(30*s)
-	drawAt(dst, face(fs(22)), "FORECAST", area.Min.X+pad, labelY, 90)
+	drawAt(dst, face(fs(24)), "FORECAST", area.Min.X+pad, labelY, 90)
 	hLine(dst, area.Min.X+pad, area.Max.X-pad, labelY+int(10*s), 180)
 
 	rowH := int(64 * s)
@@ -44,14 +44,14 @@ func (w WeatherForecast) Render(dst *image.Gray, area image.Rectangle) {
 		if i == 0 {
 			label = "Today"
 		}
-		drawAt(dst, face(fs(28)), label, area.Min.X+pad, rowTop+int(26*s), 0)
-		drawRight(dst, face(fs(28)),
+		drawAt(dst, face(fs(30)), label, area.Min.X+pad, rowTop+int(26*s), 0)
+		drawRight(dst, face(fs(30)),
 			fmt.Sprintf("%d° / %d°", round(d.HighC), round(d.LowC)),
 			area.Max.X-pad, rowTop+int(26*s), 0)
 
-		drawAt(dst, face(fs(20)),
+		drawAt(dst, face(fs(22)),
 			fmt.Sprintf("%s · rain %d%%", conditionWord(d.Code), d.PrecipChance),
-			area.Min.X+pad, rowTop+int(50*s), 90)
+			area.Min.X+pad, rowTop+int(50*s), 60)
 
 		if i < n-1 {
 			hLine(dst, area.Min.X+pad, area.Max.X-pad, rowTop+rowH-int(4*s), 220)

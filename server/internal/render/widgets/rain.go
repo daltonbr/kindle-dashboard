@@ -24,14 +24,14 @@ func (r Rain) Render(dst *image.Gray, area image.Rectangle) {
 
 	// Header line: label on the left, the peak called out on the right.
 	labelY := area.Min.Y + 28
-	drawAt(dst, face(22), "RAIN", area.Min.X+pad, labelY, 90)
+	drawAt(dst, face(24), "RAIN", area.Min.X+pad, labelY, 90)
 
 	peakChance, peakAt, totalMM := r.summarise()
 	summary := "none expected"
 	if peakChance > 0 {
 		summary = fmt.Sprintf("peak %d%% at %s · %.1fmm", peakChance, peakAt.Format("15:04"), totalMM)
 	}
-	drawRight(dst, face(22), summary, area.Max.X-pad, labelY, 60)
+	drawRight(dst, face(24), summary, area.Max.X-pad, labelY, 60)
 
 	if len(r.Hours) < 2 {
 		return
@@ -47,7 +47,7 @@ func (r Rain) Render(dst *image.Gray, area image.Rectangle) {
 	// Baseline + 6-hourly tick labels.
 	hLine(dst, chart.Min.X, chart.Max.X, chart.Max.Y, 120)
 	n := len(r.Hours)
-	tick := face(18)
+	tick := face(20)
 	for i, h := range r.Hours {
 		if h.Time.Hour()%6 != 0 {
 			continue

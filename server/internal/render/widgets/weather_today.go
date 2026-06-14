@@ -26,22 +26,22 @@ func (w WeatherToday) Render(dst *image.Gray, area image.Rectangle) {
 
 	// Card label + rule.
 	labelY := yo(30)
-	drawAt(dst, face(fs(22)), "TODAY", area.Min.X+pad, labelY, 90)
+	drawAt(dst, face(fs(24)), "TODAY", area.Min.X+pad, labelY, 90)
 	hLine(dst, area.Min.X+pad, area.Max.X-pad, labelY+int(10*s), 180)
 
 	// Big current temperature — the headline, readable across the room.
-	drawCentered(dst, face(fs(78)), fmt.Sprintf("%d°", round(w.M.Now.TempC)), cx, yo(130), 0)
+	drawCentered(dst, face(fs(84)), fmt.Sprintf("%d°", round(w.M.Now.TempC)), cx, yo(130), 0)
 
 	// Condition word.
-	drawCentered(dst, face(fs(28)), conditionWord(w.M.Now.Code), cx, yo(172), 0)
+	drawCentered(dst, face(fs(30)), conditionWord(w.M.Now.Code), cx, yo(172), 0)
 
 	// Today's high / low.
-	drawCentered(dst, face(fs(26)),
+	drawCentered(dst, face(fs(28)),
 		fmt.Sprintf("H %d°   L %d°", round(today.HighC), round(today.LowC)),
 		cx, yo(214), 0)
 
 	// Rain chance for the day.
-	drawCentered(dst, face(fs(24)),
+	drawCentered(dst, face(fs(26)),
 		fmt.Sprintf("Rain %d%%", today.PrecipChance), cx, yo(250), 60)
 }
 
