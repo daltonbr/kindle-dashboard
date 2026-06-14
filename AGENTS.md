@@ -13,7 +13,7 @@ A self-hosted family dashboard for an old jailbroken **Kindle 7th gen** (basic t
 | **M1** — Client pipeline (cron + `refresh.sh` + `eips`) | ✅ done, live on the device |
 | **M2** — Minimal Go server + Dockerfile + CI + GHCR publish | ✅ done, rendering on the panel |
 | **M3** — Weather panel (Open-Meteo) | ✅ done, live on the panel |
-| **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | ✅ effectively done — M4.1–4.5 done (D15 cadence confirmed live on device 2026-06-14); **M4.6 (battery/mount) deferred** (deprioritized 2026-06-14, hardware-led, non-blocking) |
+| **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | ✅ effectively done — M4.1–4.5 done (D15 cadence confirmed live on device 2026-06-14); refresh-freeze bug fixed 2026-06-14 (fast-return guard no longer plain-sleeps; all idle via `suspend_for()`, [D21]); **M4.6 (battery/mount) deferred** (deprioritized 2026-06-14, hardware-led, non-blocking) |
 | **M5** — Composable widgets (2×2 grid, data-layer providers) | ✅ done — three weather cards on a 2×2 grid from a typed data layer, live Open-Meteo provider (default, hourly precip + 3-day daily), layout decisions server-side (footer rain, `DASHBOARD_ORIENTATION`), deployed on the panel. First private source (was M5.5) carried forward. See `docs/widgets.md`, decisions [D16]/[D17] |
 | **M6** — Calendar (first private source) | ✅ done — live on the panel (deployed + verified 2026-06-14). `gitleaks` CI guard [D18]; `CalendarAgenda` card in the bottom-left cell, fed by a Google Calendar secret iCal URL [D19] behind the `data` seam; stdlib ICS parser + bounded-horizon RRULE, `time/tzdata` embedded [D20]. Inert without `CALENDAR_ICS_URL`. Soak/monitoring for real-feed edge cases. See `docs/roadmap.md` M6 |
 
@@ -101,7 +101,8 @@ ssh kindle 'date; tail -3 /mnt/us/dashboard/state/last.log'
 - **Rootfs is read-only by default.** Use `mntroot rw` / `mntroot ro` (located at `/usr/sbin/mntroot`) to bracket any edit under `/etc/` or `/usr/`. `/mnt/us/` is always writable.
 - **eips path issue:** `/usr/sbin/eips` is NOT on the default non-interactive `$PATH`. Set `PATH=/usr/sbin:/usr/bin:/bin` in any script.
 - **busybox crond is already running (PID 893).** Root crontab at `/etc/crontab/root`. busybox crond auto-reloads on file change — no SIGHUP needed.
-- **Sleep behavior:** the Kindle drops to deep sleep after ~30 min idle. Wi-Fi off, ssh unreachable, cron may fire but `curl` fails. Mitigation TBD (M4).
+- **Sleep behavior:** the Kindle drops to deep sleep after ~30 min idle. Wi-Fi off, ssh unreachable, cron may fire but `curl` fails. Solved in M4.2 by `loop.sh` (controlled `echo mem` suspend + RTC wake; see `docs/client.md`, [D14]).
+- **`powerd` is never stopped — and it idle-suspends behind your back.** `loop.sh` stops `framework` and `lab126_gui` but not `powerd`, so powerd still autonomously drives the panel into its stock screensaver and suspends it after a few idle minutes. The daemon only stays in control because its `echo mem` suspend wins the race; **any userspace `sleep` longer than powerd's idle timeout will be suspended mid-count and freeze** (`nanosleep` on `CLOCK_MONOTONIC` doesn't advance across suspend). This froze the dashboard for ~8h on 2026-06-14 — fixed by routing all idle through `suspend_for()` ([D21]).
 - **Jailbreak inventory:** linkss (screensaver hack — supports "last screen" mode, the leading post-MVP candidate for the refresh path), BatteryStatus, KUAL, MRInstaller, koreader, usbnet, linkfonts.
 - **Open-Meteo** is the M3 weather source. No API key required.
 
@@ -121,6 +122,7 @@ These are recorded throughout the docs but the headlines:
 - **Do not** modify or delete `docs/recon/*.md` — they're dated snapshots.
 - **Do not** lower `go 1.26` in `go.mod` (user wants latest Go for security patches; tool support is the variable to fix instead).
 - **Do not** `mntroot rw` and forget to `mntroot ro` after.
+- **Do not** add a long userspace `sleep` to `loop.sh` — it freezes when powerd suspends the device mid-sleep. Idle only via `suspend_for()` ([D21]).
 - **Do not** flip repo settings (visibility, branch protection, package visibility) without explicit user confirmation in the current turn — those are durable admin changes.
 - **Do not** treat memory recall as authoritative; verify on disk before acting on it.
 
