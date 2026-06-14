@@ -112,3 +112,11 @@ func hLine(dst *image.Gray, x0, x1, y int, gray uint8) {
 		dst.SetGray(x, y, c)
 	}
 }
+
+// vLine draws a vertical rule down [y0,y1) at x.
+func vLine(dst *image.Gray, x, y0, y1 int, gray uint8) {
+	c := color.Gray{Y: gray}
+	for y := y0; y < y1; y++ {
+		dst.SetGray(x, y, c)
+	}
+}

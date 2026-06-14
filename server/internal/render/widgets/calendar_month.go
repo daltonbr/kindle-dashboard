@@ -79,6 +79,9 @@ func (w CalendarMonth) Render(dst *image.Gray, area image.Rectangle) {
 	rowH := (gridBottom - gridTop) / weeks
 	numFace := face(fs(22))
 
+	// Light rule before the Saturday column (index 5), setting the weekend apart.
+	vLine(dst, gridLeft+5*colW, headBaseY-int(14*s), gridBottom, 210)
+
 	for i := range weeks * 7 {
 		day := gridStart.AddDate(0, 0, i)
 		col, row := i%7, i/7

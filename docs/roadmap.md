@@ -3,11 +3,13 @@
 Milestones, roughly in order. Each one ends with a working, demonstrable thing — no half-states.
 
 > **Current status (2026-06-14): M6 (Calendar) shipped + deployed; M6.5
-> (two-line titles) live; M7 (rolling month tile) code-complete.** The agenda
-> renders from the real Google Calendar secret iCal feed, titles wrap to two
-> lines and strip unrenderable glyphs (M6.5, deployed + verified), and the
-> bottom-right cell now holds a rolling month grid that complements the agenda
-> (M7 — code-complete, **deploy + verify pending**).
+> (two-line titles) live; M7 (rolling month tile + layout swap) code-complete.**
+> The agenda renders from the real Google Calendar secret iCal feed and titles
+> wrap to two lines / strip unrenderable glyphs (M6.5, deployed + verified). The
+> grid was rearranged (M7.3): **calendar on top** (month grid top-left, agenda
+> top-right), **weather on the bottom** (today bottom-left, forecast
+> bottom-right); the header now shows the current temperature after the date.
+> (M7 — code-complete, **deploy + verify pending**.)
 >
 > **M4.6 (battery/mount) is deferred** — deprioritized by the operator
 > (2026-06-14); it's hardware-led and not blocking. The rest of M4 is done (D15
@@ -315,10 +317,19 @@ layer.
       and the month footer shows the next ~2 after that (shared
       `defaultAgendaEvents` constant), so they complement rather than duplicate.
       Titles reuse the agenda's `sanitizeTitle`/`truncateToWidth`.
-- [x] **M7.2 — Wire + place.** ✅ `drawAgenda` now also renders `CalendarMonth`
-      in `CellRect(1, 1, 1, 1)` under the same condition as the agenda
-      (Calendar set + rain in footer). Unit-tested (later-tail selection, empty
-      tail, event-day set, ink/empty render). **Deploy + verify on the panel
+- [x] **M7.2 — Wire + place.** ✅ Rendered alongside the agenda under the same
+      condition (Calendar set + rain in footer). Unit-tested (later-tail
+      selection, empty tail, event-day set, ink/empty render).
+- [x] **M7.3 — Layout swap + polish.** ✅ Rearranged the grid: **calendar on the
+      top row** (month grid top-left `CellRect(0,0)`, agenda top-right
+      `CellRect(1,0)`), **weather on the bottom row** (today bottom-left,
+      forecast bottom-right) — the calendar leads since "what's coming up" is the
+      glanceable thing. `drawAgenda` → `drawCalendar`; weather always occupies
+      the bottom row, and when `RainInFooter` is false the rain card now takes
+      the *top* row (calendar yields, weather stays visible). Plus: a light
+      vertical rule before the Saturday column sets the weekend apart (`vLine`
+      helper), and the header shows the current temperature after the date
+      (`drawHeader` now takes the weather model). **Deploy + verify on the panel
       pending.**
 
 ---

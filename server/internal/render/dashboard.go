@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"math"
 	"time"
 
 	"golang.org/x/image/font"
@@ -39,61 +40,66 @@ type Options struct {
 // "weather unavailable" state.
 //
 // Layout (portrait): a square 2×2 grid between equal header/footer bands.
-//   - top-left:  today  (1×1)   top-right: forecast (1×1)
-//   - bottom:    rain    (2×1)   — unless RainInFooter, then the footer holds it
-//     and the bottom row frees up: bottom-left → agenda, bottom-right → rolling
-//     month grid (both when Calendar is set).
+//   - top-left:  month grid (1×1)   top-right: agenda (1×1)  — when Calendar is set
+//   - bottom-left: today (1×1)       bottom-right: forecast (1×1)
+//   - footer: rain strip — unless RainInFooter is false, in which case a rain
+//     card takes the top row (and the calendar yields, keeping weather visible).
 func Dashboard(model *data.WeatherModel, opts Options) *image.Gray {
 	g := NewGrid(opts.Orientation, 2, 2)
 
 	img := image.NewGray(image.Rect(0, 0, g.W, g.H))
 	fill(img, img.Bounds(), 255)
 
-	drawHeader(img, g, opts)
+	drawHeader(img, g, opts, model)
 
 	if model == nil {
-		hr := g.HeaderRect()
-		drawAt(img, fonts.Face(30), "Weather unavailable", hr.Min.X, g.Origin.Y+g.CellH, 0)
-		drawAgenda(img, g, opts) // calendar is independent of weather
+		drawCalendar(img, g, opts) // calendar is independent of weather (top row)
+		cell := g.CellRect(0, 1, 2, 1)
+		drawAt(img, fonts.Face(30), "Weather unavailable", cell.Min.X+16, (cell.Min.Y+cell.Max.Y)/2, 0)
 		drawFooterCredit(img, g, opts, false)
 		return img
 	}
 
 	m := *model
-	widgets.WeatherToday{M: m}.Render(img, g.CellRect(0, 0, 1, 1))
-	widgets.WeatherForecast{M: m}.Render(img, g.CellRect(1, 0, 1, 1))
+	// Weather occupies the bottom row; the calendar (or a rain card) takes the top.
+	widgets.WeatherToday{M: m}.Render(img, g.CellRect(0, 1, 1, 1))
+	widgets.WeatherForecast{M: m}.Render(img, g.CellRect(1, 1, 1, 1))
 
 	rain := widgets.Rain{Hours: m.Hourly}
 	if opts.RainInFooter {
 		rain.Render(img, g.FooterRect())
+		drawCalendar(img, g, opts) // top row
 	} else {
-		rain.Render(img, g.CellRect(0, 1, 2, 1)) // span the full bottom row
+		rain.Render(img, g.CellRect(0, 0, 2, 1)) // rain card takes the top row
 	}
-	drawAgenda(img, g, opts)
 	drawFooterCredit(img, g, opts, opts.RainInFooter)
 
 	return img
 }
 
-// drawAgenda places the two calendar cards on the bottom grid row: the agenda
-// ("what's next") bottom-left and the rolling month grid bottom-right. They
-// only render when a calendar model is present and the bottom row is free (rain
-// moved to the footer); with rain occupying the bottom 2×1 card there is no room.
-func drawAgenda(img *image.Gray, g Grid, opts Options) {
-	if opts.Calendar == nil || !opts.RainInFooter {
+// drawCalendar places the two calendar cards on the top grid row: the rolling
+// month grid top-left and the agenda ("what's next") top-right. It no-ops when
+// no calendar model is present.
+func drawCalendar(img *image.Gray, g Grid, opts Options) {
+	if opts.Calendar == nil {
 		return
 	}
-	widgets.CalendarAgenda{M: *opts.Calendar, Now: opts.Now}.Render(img, g.CellRect(0, 1, 1, 1))
-	widgets.CalendarMonth{M: *opts.Calendar, Now: opts.Now}.Render(img, g.CellRect(1, 1, 1, 1))
+	widgets.CalendarMonth{M: *opts.Calendar, Now: opts.Now}.Render(img, g.CellRect(0, 0, 1, 1))
+	widgets.CalendarAgenda{M: *opts.Calendar, Now: opts.Now}.Render(img, g.CellRect(1, 0, 1, 1))
 }
 
-// drawHeader paints the date on the left and the optional battery on the right,
-// vertically centred in the header band with a large, readable date.
-func drawHeader(img *image.Gray, g Grid, opts Options) {
+// drawHeader paints the date (with the current temperature appended when weather
+// is available) on the left and the optional battery on the right, vertically
+// centred in the header band with a large, readable date.
+func drawHeader(img *image.Gray, g Grid, opts Options, model *data.WeatherModel) {
 	hr := g.HeaderRect()
 	baseY := (hr.Min.Y+hr.Max.Y)/2 + 12
 
-	drawAt(img, fonts.Face(34), opts.Now.Format("Mon 2 Jan"), hr.Min.X+4, baseY, 0)
+	text := opts.Now.Format("Mon 2 Jan")
+	if model != nil {
+		text += fmt.Sprintf("   %d°", int(math.Round(model.Now.TempC)))
+	}
+	drawAt(img, fonts.Face(34), text, hr.Min.X+4, baseY, 0)
 
 	if opts.Battery != nil {
 		drawBattery(img, image.Rect(0, baseY-28, hr.Max.X, baseY), *opts.Battery)
