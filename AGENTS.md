@@ -14,7 +14,7 @@ A self-hosted family dashboard for an old jailbroken **Kindle 7th gen** (basic t
 | **M2** — Minimal Go server + Dockerfile + CI + GHCR publish | ✅ done, rendering on the panel |
 | **M3** — Weather panel (Open-Meteo) | ✅ done, live on the panel |
 | **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | 🔄 in progress — M4.1/4.2/4.3/4.5 done; M4.4 (healthcheck) + M4.6 (battery/mount) open |
-| **M5** — Composable widgets (2×2 grid, data-layer providers) | 🔄 in progress — seam shipped (three weather cards); live Open-Meteo provider wired (M5.3 done: hourly precip + 3-day daily, now the default). M5.5 (first private source) deferred. See `docs/widgets.md`, decisions [D16]/[D17] |
+| **M5** — Composable widgets (2×2 grid, data-layer providers) | ✅ done — three weather cards on a 2×2 grid from a typed data layer, live Open-Meteo provider (default, hourly precip + 3-day daily), layout decisions server-side (footer rain, `DASHBOARD_ORIENTATION`), deployed on the panel. First private source (was M5.5) carried forward. See `docs/widgets.md`, decisions [D16]/[D17] |
 
 See `docs/roadmap.md` for sub-task breakdowns, and `docs/widgets.md` for the M5 widget architecture.
 

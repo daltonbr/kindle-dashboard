@@ -156,7 +156,7 @@ Tested on 2026-05-26 via `ssh kindle /sbin/reboot`. The daemon **does** survive 
 
 ---
 
-## M5 — Composable widgets
+## M5 — Composable widgets ✅
 
 Full design + rationale in [widgets.md](widgets.md); separation/safety decision in [D16](decisions.md#d16--widget-data-layer-in-repo-providers-secrets-via-env). Move from one hard-coded layout to small widgets on a **2×2 grid + spans** (portrait default, landscape supported), with a typed **data layer** behind per-domain provider interfaces. Integration code stays in this public repo; secrets + personal config live only in the deployment env. Native iOS/macOS widgets are a **non-goal**. Single static layout for now.
 
@@ -183,8 +183,23 @@ filling 2×2 grid, developed against demo data first.
       `WeatherForecast` (1×1), `Rain` (2×1, rect-agnostic — also rendable in the
       footer via `?rain=footer`). A distinct non-weather widget (clock/date) is
       still open if we want one.
-- [ ] **M5.5** — (deferred) First private source (Calendar or Home Assistant);
-      add `gitleaks` CI guard first.
+- [x] **M5.6** — Layout decisions moved server-side so the device fetches a bare
+      `/dashboard.png`: rain defaults to the footer strip (`?rain=card` opts into
+      the in-grid card) and orientation is a server setting
+      (`DASHBOARD_ORIENTATION`, `?orientation=` overrides per request). The
+      preview page only drives device telemetry (`batt`/`plug`).
+
+**Definition of done met:** three composable weather widgets render on the 2×2
+grid from a typed data layer, fed by the live Open-Meteo provider (default), and
+deployed on the wall panel. Layout choices live on the server; the Kindle's
+request carries only its own telemetry.
+
+Carried forward (not part of M5's shipped scope):
+- **First private source (Calendar or Home Assistant)** behind the same provider
+  interface — keys/tokens + personal IDs via env, documented with placeholders.
+  Add a `gitleaks` CI guard before it lands. (Was M5.5; deferred to a later
+  milestone.)
+- A distinct non-weather widget (clock/date) on the grid, if wanted.
 
 ---
 

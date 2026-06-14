@@ -1,8 +1,9 @@
 # Widget architecture (M5) — design + plan
 
-Status: **building (2026-06-14).** Core seam shipped — three weather cards on a
-filling 2×2 grid, both rain placements, and the live Open-Meteo provider (M5.3,
-hourly precip + 3-day daily) wired as the default. The build is a
+Status: **complete (2026-06-14).** Three weather cards on a filling 2×2 grid,
+both rain placements, the live Open-Meteo provider (M5.3, hourly precip + 3-day
+daily) wired as the default, and layout decisions moved server-side (M5.6) so the
+device fetches a bare `/dashboard.png`. The build is a
 deliberate **redesign**, not the byte-for-byte port this doc originally sketched;
 see [D17](decisions.md#d17--m5-widget-build-redesign-over-byte-for-byte-port-three-weather-cards-on-a-filling-22)
 for what changed and the [step checklist](#next-steps-m5-checklist) for current
@@ -153,10 +154,16 @@ Sequenced so each step ends with something runnable, and the two halves
       `WeatherToday` (1×1), `WeatherForecast` (1×1), `Rain` (2×1). The `Rain`
       renderer is rect-agnostic — also rendable in the footer via `?rain=footer`.
       A non-weather widget (clock/date) is still open if wanted.
-- [ ] **M5.5 — (deferred) First private source.** Calendar or Home Assistant,
-      behind the same provider interface; keys/tokens + personal IDs via env,
-      documented with placeholders in `server.md`. Add a `gitleaks` CI guard
-      before this lands.
+- [x] **M5.6 — Layout decisions server-side.** Rain defaults to the footer strip
+      (`?rain=card` opts into the in-grid card); orientation is a server setting
+      (`DASHBOARD_ORIENTATION`, `?orientation=` overrides). The device fetches a
+      bare `/dashboard.png`; the preview drives only `batt`/`plug`.
+
+**M5 complete** (2026-06-14). Carried forward to a later milestone:
+
+- **First private source** (Calendar or Home Assistant) behind the same provider
+  interface; keys/tokens + personal IDs via env, documented with placeholders in
+  `server.md`. Add a `gitleaks` CI guard before it lands. *(Was M5.5.)*
 
 ## Open questions (deliberately deferred)
 
