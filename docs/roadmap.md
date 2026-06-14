@@ -5,10 +5,12 @@ Milestones, roughly in order. Each one ends with a working, demonstrable thing �
 > **Current focus (2026-06-14): close out M4.** M5 shipped; M4.4 healthcheck is
 > done (in-binary `server healthcheck`), and the D15 time-of-day cadence is
 > confirmed live on the device (M4.3). The only M4 work left is **M4.6 —
-> battery/mount**: the device runs mostly on battery (has hit 4%), so the open
-> questions are power delivery at the mount and a clean drain-slope read before
-> touching the daytime cadence. After M4: the first **private data source** (M5
-> follow-on — Calendar/Home Assistant, needs a `gitleaks` guard).
+> battery/mount** (hardware-led: power delivery at the mount + a clean
+> drain-slope read; the device runs mostly on battery and has hit 4%).
+>
+> **Next coding milestone: M6 — Calendar (first private source).** Start with the
+> `gitleaks` guard (M6.0), then build the agenda widget behind the data seam.
+> See the M6 section below.
 
 ## M0 — Repo bootstrap ✅
 
@@ -212,11 +214,47 @@ deployed on the wall panel. Layout choices live on the server; the Kindle's
 request carries only its own telemetry.
 
 Carried forward (not part of M5's shipped scope):
-- **First private source (Calendar or Home Assistant)** behind the same provider
-  interface — keys/tokens + personal IDs via env, documented with placeholders.
-  Add a `gitleaks` CI guard before it lands. (Was M5.5; deferred to a later
-  milestone.)
+- **First private source** → promoted to its own milestone: **M6 — Calendar**
+  (Calendar chosen over Home Assistant, 2026-06-14). See the M6 section below.
 - A distinct non-weather widget (clock/date) on the grid, if wanted.
+
+---
+
+## M6 — First private source: Calendar
+
+The first integration that needs **secrets + personal identifiers**, behind the
+existing `data` provider seam (decision [D16](decisions.md#d16--widget-data-layer-in-repo-providers-secrets-via-env)).
+Goal: an agenda widget showing the next few events, filling the empty
+bottom-left grid cell (the one freed when rain renders in the footer). Decided
+2026-06-14: **Calendar first** (over Home Assistant).
+
+Sequenced so each step ends runnable and the secret path is provably inert
+without config:
+
+- [ ] **M6.0 — `gitleaks` CI guard (prerequisite).** Add a gitleaks scan to CI
+      (and a pre-commit hint) before any secret-handling code lands. Brief
+      `decisions.md` entry for the tool choice.
+- [ ] **M6.1 — Auth approach + data model.** Decide how to read the calendar.
+      **Leaning:** a Google Calendar **secret iCal URL** (single secret env var,
+      read-only, no OAuth dance) over CalDAV/OAuth — record as a `decisions.md`
+      entry. Define `data.CalendarModel` (events: title, start, end, all-day) +
+      `CalendarProvider` interface + `DemoCalendar` (hardcoded fixture).
+- [ ] **M6.2 — ICS fetch + parse.** Fetch the feed (TTL-cached like weather) and
+      parse VEVENTs. **Key decision:** minimal stdlib VEVENT parser vs a small
+      dep (e.g. an ical library) — recurrence (RRULE) + timezones are the
+      deciding factor; a dep needs a `decisions.md` entry (stdlib-first rule).
+- [ ] **M6.3 — `CalendarAgenda` widget.** Draw the next N events into a 1×1 cell,
+      reusing the widget drawing helpers; respect the ~20px legibility floor.
+      Develop against `DemoCalendar` first.
+- [ ] **M6.4 — Wire + place.** Provider selected via `CALENDAR_ICS_URL` env
+      (inert/omitted when unset — clone-safe); place the widget in the empty
+      bottom-left cell in `dashboard.go`. Document the env var with a
+      **placeholder** in `server.md`. Deploy + verify.
+
+> **Secret hygiene reminder:** the calendar URL/token + any calendar IDs are
+> secret/personal — env only, never committed, never in the image (it stays
+> `FROM scratch`). The real deployment value lives in the homelab config, not
+> the repo.
 
 ---
 

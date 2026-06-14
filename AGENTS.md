@@ -16,6 +16,10 @@ A self-hosted family dashboard for an old jailbroken **Kindle 7th gen** (basic t
 | **M4** — Polish + reliability (sleep/wake, battery, prod cadence) | 🔄 in progress — M4.1–4.5 done (D15 cadence confirmed live on device 2026-06-14); only M4.6 (battery/mount + drain-slope read) open |
 | **M5** — Composable widgets (2×2 grid, data-layer providers) | ✅ done — three weather cards on a 2×2 grid from a typed data layer, live Open-Meteo provider (default, hourly precip + 3-day daily), layout decisions server-side (footer rain, `DASHBOARD_ORIENTATION`), deployed on the panel. First private source (was M5.5) carried forward. See `docs/widgets.md`, decisions [D16]/[D17] |
 
+**Next up: M6 — Calendar (first private source).** Agenda widget behind the
+`data` provider seam; start with a `gitleaks` CI guard, then build against a demo
+fixture. See `docs/roadmap.md` M6.
+
 See `docs/roadmap.md` for sub-task breakdowns, and `docs/widgets.md` for the M5 widget architecture.
 
 ## Repo layout
