@@ -65,7 +65,7 @@ func (w CalendarAgenda) Render(dst *image.Gray, area image.Rectangle) {
 
 	y := top
 	for i, e := range events {
-		lines := wrapToWidth(titleFace, e.Title, maxTitleW, maxTitleLines)
+		lines := wrapToWidth(titleFace, sanitizeTitle(e.Title), maxTitleW, maxTitleLines)
 		blockH := len(lines)*titleLineH + int(30*s) // title lines + when-label row
 		if i > 0 && y+blockH > bottom {
 			break
@@ -84,6 +84,20 @@ func (w CalendarAgenda) Render(dst *image.Gray, area image.Rectangle) {
 			y += int(8 * s)
 		}
 	}
+}
+
+// sanitizeTitle drops runes the display font can't render (emoji and other
+// pictographs, which would otherwise show as blank "tofu" boxes on the panel)
+// and collapses the whitespace they leave behind.
+func sanitizeTitle(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if hasGlyph(r) {
+			b.WriteRune(r)
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
 }
 
 // wrapToWidth lays s out across at most maxLines lines, each fitting maxW pixels

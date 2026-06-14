@@ -81,6 +81,10 @@ func vscale(area image.Rectangle) float64 {
 
 func face(px float64) font.Face { return fonts.Face(px) }
 
+// hasGlyph reports whether the display font can render r (false for emoji and
+// other uncovered runes, which draw as blank boxes).
+func hasGlyph(r rune) bool { return fonts.HasGlyph(r) }
+
 func drawAt(dst *image.Gray, f font.Face, s string, x, y int, gray uint8) {
 	d := &font.Drawer{
 		Dst:  dst,

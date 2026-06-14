@@ -283,6 +283,10 @@ without config:
       top-down and drops a trailing event rather than clipping it mid-row, so
       2–3 events show comfortably. Default cap lowered 4 → 3. The empty
       bottom-right cell stays free for a future widget (e.g. a rolling month).
+      Titles are also sanitised: runes the Atkinson font can't render (emoji,
+      pictographs) are stripped via `fonts.HasGlyph` so they don't draw as blank
+      "tofu" boxes, with the leftover whitespace collapsed — accented Latin
+      (å/ä/ö etc.) is kept, since coverage is checked against the actual font.
 
 > **Secret hygiene reminder:** the calendar URL/token + any calendar IDs are
 > secret/personal — env only, never committed, never in the image (it stays

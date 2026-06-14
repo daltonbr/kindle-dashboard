@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/font/sfnt"
 )
 
 //go:embed AtkinsonHyperlegible-Regular.ttf
@@ -21,7 +22,21 @@ var (
 
 	faceMu sync.Mutex
 	faces  = map[float64]font.Face{}
+
+	// glyphBuf is reused across HasGlyph calls; sfnt.Buffer is not safe for
+	// concurrent use, so access is guarded by faceMu.
+	glyphBuf sfnt.Buffer
 )
+
+// HasGlyph reports whether the embedded font has a glyph for r. Runes without
+// one (emoji, other pictographs) draw as blank "tofu", so callers can strip
+// them before rendering. Space and other covered punctuation return true.
+func HasGlyph(r rune) bool {
+	faceMu.Lock()
+	defer faceMu.Unlock()
+	idx, err := parsed.GlyphIndex(&glyphBuf, r)
+	return err == nil && idx != 0
+}
 
 func init() {
 	f, err := opentype.Parse(atkinsonTTF)

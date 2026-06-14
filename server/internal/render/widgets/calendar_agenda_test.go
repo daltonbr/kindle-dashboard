@@ -95,6 +95,23 @@ func TestWrapToWidth(t *testing.T) {
 	}
 }
 
+func TestSanitizeTitle(t *testing.T) {
+	cases := []struct {
+		name, in, want string
+	}{
+		{"plain", "Dentist", "Dentist"},
+		{"accents kept", "Köpa mjölk åt Åsa", "Köpa mjölk åt Åsa"},
+		{"emoji stripped", "🎂 Birthday party", "Birthday party"},
+		{"emoji mid + ZWJ family", "Lunch 👨‍👩‍👧 with Sam", "Lunch with Sam"},
+		{"trailing emoji + space collapse", "Gym 💪", "Gym"},
+	}
+	for _, c := range cases {
+		if got := sanitizeTitle(c.in); got != c.want {
+			t.Errorf("%s: sanitizeTitle(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+	}
+}
+
 func TestCalendarAgenda_emptyState(t *testing.T) {
 	img := image.NewGray(image.Rect(0, 0, 300, 320))
 	fillWhite(img)
