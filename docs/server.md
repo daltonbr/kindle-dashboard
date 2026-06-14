@@ -49,6 +49,9 @@ M3 will add `internal/weather/` (Open-Meteo client + TTL cache) and embedded TTF
 | `WEATHER_LAT` | `50.8225` | Latitude for the Open-Meteo lookup. Default is Brighton, UK. *(only used when `WEATHER_PROVIDER=openmeteo`)* |
 | `WEATHER_LON` | `-0.1372` | Longitude for the Open-Meteo lookup. *(openmeteo only)* |
 | `WEATHER_TTL` | `10m` | Any `time.Duration`. The upstream cache TTL; `0` disables caching. *(openmeteo only)* |
+| `CALENDAR_ICS_URL` | _(unset)_ | **Secret.** A read-only iCal feed URL (e.g. a Google Calendar "Secret address in iCal format") for the agenda card. **Unset ⇒ no agenda card** (inert/clone-safe). Treat as a credential — env/vault only, never committed. See [D19](decisions.md#d19--calendar-auth-google-calendar-secret-ical-url) + [Secret hygiene](#secret-hygiene--config-public-repo). |
+| `CALENDAR_PROVIDER` | _(unset)_ | Set to `demo` to render the agenda from a network-free fixture (widget development / offline). When `demo`, `CALENDAR_ICS_URL` is ignored. |
+| `CALENDAR_TTL` | `15m` | Any `time.Duration`. Cache TTL for the iCal feed. *(only used when `CALENDAR_ICS_URL` is set)* |
 
 > **M5 note:** the server defaults to `WEATHER_PROVIDER=openmeteo`. The
 > Open-Meteo client fetches hourly precipitation (probability + amount) and a
@@ -58,6 +61,19 @@ M3 will add `internal/weather/` (Open-Meteo client + TTL cache) and embedded TTF
 > fixture.
 
 > **Operator TODO:** expose `WEATHER_LAT` / `WEATHER_LON` / `WEATHER_TTL` as variables in the deployment config so they can be tuned without rebuilding the image. Currently relying on the image's built-in Brighton defaults.
+
+> **M6 note (calendar):** the agenda card (bottom-left cell, shown when rain is in
+> the footer) is driven by `CALENDAR_ICS_URL`. It is **inert when unset** — the
+> public image and any clone show no agenda until the operator supplies the feed
+> URL at run time. The URL is a **secret** (a bearer credential): inject it from
+> the host vault via `--env-file`, never bake it into the image or commit it.
+> Example `--env-file` line (placeholder — **not** a real URL):
+> ```
+> CALENDAR_ICS_URL=https://calendar.google.com/calendar/ical/REDACTED/private-REDACTED/basic.ics
+> ```
+> For layout work without a real feed, set `CALENDAR_PROVIDER=demo`. The image
+> stays `FROM scratch`; timezone resolution for `TZID` events uses the embedded
+> Go `time/tzdata` (no system zoneinfo needed). See [D20](decisions.md#d20--ics-parsing-stdlib-bounded-horizon-recurrence-no-ical-dependency).
 
 ### Secret hygiene & config (public repo)
 

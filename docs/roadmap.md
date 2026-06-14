@@ -262,10 +262,16 @@ without config:
       cell (mirrors the forecast card's label/rule/row idiom + `vscale`).
       Developed and eyeballed against `DemoCalendar`; unit-tested
       (day/when labels, truncation, footprint, ink, empty state).
-- [ ] **M6.4 — Wire + place.** Provider selected via `CALENDAR_ICS_URL` env
-      (inert/omitted when unset — clone-safe); place the widget in the empty
-      bottom-left cell in `dashboard.go`. Document the env var with a
-      **placeholder** in `server.md`. Deploy + verify.
+- [x] **M6.4 — Wire + place.** ✅ `buildCalendarProvider` in `main.go` selects
+      the source: `CALENDAR_ICS_URL` (live, cached for `CALENDAR_TTL`, default
+      15m), `CALENDAR_PROVIDER=demo` (fixture), or **nil/inert when unset**
+      (clone-safe — no agenda). The handler fetches it independently of weather
+      (a calendar failure just omits the card). `render.Options.Calendar` places
+      `CalendarAgenda` in the bottom-left cell when rain is in the footer.
+      `server.md` documents `CALENDAR_ICS_URL`/`CALENDAR_PROVIDER`/`CALENDAR_TTL`
+      with a **placeholder** URL + secret-hygiene note. The URL is logged only as
+      a TTL, never echoed. **Remaining: deploy + on-device verify** (operator
+      adds the secret to the vault and redeploys).
 
 > **Secret hygiene reminder:** the calendar URL/token + any calendar IDs are
 > secret/personal — env only, never committed, never in the image (it stays

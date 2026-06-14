@@ -6,6 +6,8 @@ import (
 	"image/png"
 	"testing"
 	"time"
+
+	"github.com/daltonbr/kindle-dashboard/server/internal/data"
 )
 
 func TestDashboard_dimensionsAndEncoding(t *testing.T) {
@@ -37,4 +39,37 @@ func TestDashboard_dimensionsAndEncoding(t *testing.T) {
 	if !bytes.Equal(got, wantMagic) {
 		t.Errorf("PNG magic = % x, want % x", got, wantMagic)
 	}
+}
+
+// The agenda occupies the bottom-left cell only when a calendar model is present
+// and rain has moved to the footer (freeing the bottom grid row).
+func TestDashboard_agendaPlacement(t *testing.T) {
+	now := time.Date(2026, 6, 14, 8, 54, 0, 0, time.UTC)
+	model := data.DemoModel(now)
+	cal := data.DemoCalendarModel(now)
+
+	g := NewGrid(Portrait, 2, 2)
+	bottomLeft := g.CellRect(0, 1, 1, 1)
+
+	withCal := Dashboard(&model, Options{Orientation: Portrait, Now: now, RainInFooter: true, Calendar: &cal})
+	if !hasInkIn(withCal, bottomLeft) {
+		t.Error("agenda card drew no ink in the bottom-left cell when wired")
+	}
+
+	// No calendar model → bottom-left cell stays blank (rain is in the footer).
+	noCal := Dashboard(&model, Options{Orientation: Portrait, Now: now, RainInFooter: true})
+	if hasInkIn(noCal, bottomLeft) {
+		t.Error("bottom-left cell should be blank when no calendar model is set")
+	}
+}
+
+func hasInkIn(img *image.Gray, area image.Rectangle) bool {
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; x++ {
+			if img.GrayAt(x, y).Y < 255 {
+				return true
+			}
+		}
+	}
+	return false
 }

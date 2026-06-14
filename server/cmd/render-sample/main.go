@@ -20,6 +20,7 @@ import (
 func main() {
 	now := time.Date(2026, 6, 14, 8, 54, 0, 0, time.UTC)
 	model := data.DemoModel(now)
+	cal := data.DemoCalendarModel(now)
 	batt := &render.Battery{Level: 53, Charging: true}
 
 	samples := []struct {
@@ -27,8 +28,9 @@ func main() {
 		opts render.Options
 	}{
 		{"/tmp/sample-portrait.png", render.Options{Orientation: render.Portrait, Now: now, Battery: batt}},
-		{"/tmp/sample-footer.png", render.Options{Orientation: render.Portrait, Now: now, Battery: batt, RainInFooter: true}},
-		{"/tmp/sample-landscape.png", render.Options{Orientation: render.Landscape, Now: now, Battery: batt}},
+		// Footer rain frees the bottom row, so the agenda card appears bottom-left.
+		{"/tmp/sample-footer.png", render.Options{Orientation: render.Portrait, Now: now, Battery: batt, RainInFooter: true, Calendar: &cal}},
+		{"/tmp/sample-landscape.png", render.Options{Orientation: render.Landscape, Now: now, Battery: batt, RainInFooter: true, Calendar: &cal}},
 	}
 
 	for _, s := range samples {

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/daltonbr/kindle-dashboard/server/internal/calendar"
 	"github.com/daltonbr/kindle-dashboard/server/internal/data"
 	"github.com/daltonbr/kindle-dashboard/server/internal/render"
 	"github.com/daltonbr/kindle-dashboard/server/internal/weather"
@@ -47,12 +48,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	calProvider, err := buildCalendarProvider()
+	if err != nil {
+		slog.Error("calendar config", "err", err)
+		os.Exit(1)
+	}
+
 	orientationName := envOrDefault("DASHBOARD_ORIENTATION", "portrait")
 	defaultOrientation := orientationFromName(orientationName)
 	slog.Info("default orientation", "value", orientationName)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(provider, defaultOrientation))
+	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(provider, calProvider, defaultOrientation))
 	mux.HandleFunc("GET /healthz", handleHealth)
 	mux.HandleFunc("GET /preview", handlePreview)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +110,34 @@ func buildWeatherProvider() (data.WeatherProvider, error) {
 	}
 }
 
+// buildCalendarProvider selects the agenda data source. It is inert by default:
+// with neither CALENDAR_ICS_URL nor CALENDAR_PROVIDER set it returns nil, so a
+// clone with no config simply shows no agenda card (decision D16/D19). Set
+// CALENDAR_PROVIDER=demo for the network-free fixture, or CALENDAR_ICS_URL to a
+// Google Calendar secret iCal feed for live data (cached for CALENDAR_TTL,
+// default 15m).
+func buildCalendarProvider() (data.CalendarProvider, error) {
+	if strings.EqualFold(os.Getenv("CALENDAR_PROVIDER"), "demo") {
+		slog.Info("calendar provider", "kind", "demo")
+		return data.DemoCalendar{}, nil
+	}
+
+	url := os.Getenv("CALENDAR_ICS_URL")
+	if url == "" {
+		slog.Info("calendar provider", "kind", "none (CALENDAR_ICS_URL unset)")
+		return nil, nil
+	}
+
+	ttl, err := time.ParseDuration(envOrDefault("CALENDAR_TTL", "15m"))
+	if err != nil {
+		return nil, errors.New("CALENDAR_TTL: " + err.Error())
+	}
+	// Log only the TTL — never the URL; it is a secret credential (D19).
+	slog.Info("calendar provider", "kind", "ics", "ttl", ttl)
+	cache := calendar.NewCache(calendar.NewClient(url, nil), ttl)
+	return data.NewICSCalendar(cache, 0), nil
+}
+
 func buildWeatherCache() (*weather.Cache, error) {
 	lat, err := strconv.ParseFloat(envOrDefault("WEATHER_LAT", "50.8225"), 64)
 	if err != nil {
@@ -120,7 +155,7 @@ func buildWeatherCache() (*weather.Cache, error) {
 	return weather.NewCache(weather.NewClient("", nil), lat, lon, ttl), nil
 }
 
-func makeDashboardHandler(provider data.WeatherProvider, defaultOrientation render.Orientation) http.HandlerFunc {
+func makeDashboardHandler(provider data.WeatherProvider, calProvider data.CalendarProvider, defaultOrientation render.Orientation) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fetchCtx, cancel := context.WithTimeout(r.Context(), weatherFetchTimeout)
 		defer cancel()
@@ -133,12 +168,24 @@ func makeDashboardHandler(provider data.WeatherProvider, defaultOrientation rend
 			model = &m
 		}
 
+		// Calendar is independent of weather: a failure here just omits the
+		// agenda card, it doesn't blank the dashboard.
+		var calModel *data.CalendarModel
+		if calProvider != nil {
+			if cm, err := calProvider.Calendar(fetchCtx); err != nil {
+				slog.Warn("calendar fetch failed", "err", err)
+			} else {
+				calModel = &cm
+			}
+		}
+
 		q := r.URL.Query()
 		opts := render.Options{
 			Orientation:  parseOrientation(q, defaultOrientation),
 			Now:          time.Now(),
 			Battery:      parseBattery(q),
 			RainInFooter: parseRainInFooter(q),
+			Calendar:     calModel,
 		}
 
 		img := render.Dashboard(model, opts)
