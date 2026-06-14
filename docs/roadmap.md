@@ -2,17 +2,18 @@
 
 Milestones, roughly in order. Each one ends with a working, demonstrable thing — no half-states.
 
-> **Current focus (2026-06-14): deploy + verify M6 (Calendar).** All M6 code
-> (M6.0–M6.4) is merged: gitleaks guard, secret iCal URL + data model, stdlib ICS
-> parser with bounded RRULE, the `CalendarAgenda` card, and the
-> `CALENDAR_ICS_URL` wiring. The operator has set the secret in the deployment
-> env; what remains is pulling the new GHCR image and confirming the agenda on the
-> wall panel.
+> **Current status (2026-06-14): M6 (Calendar) shipped + deployed.** All M6 code
+> (M6.0–M6.4) is merged and the new GHCR image is live on the wall panel — the
+> operator redeployed and confirmed the agenda card renders from the real
+> Google Calendar secret iCal feed. Soak/monitoring underway for a few days to
+> catch real-feed recurrence/timezone edge cases (D20 lists known gaps).
 >
 > **M4.6 (battery/mount) is deferred** — deprioritized by the operator
 > (2026-06-14); it's hardware-led and not blocking. The rest of M4 is done (D15
-> cadence live, M4.4 healthcheck shipped). Pick the next coding milestone from the
-> post-M4 ideas once M6 is verified on the device.
+> cadence live, M4.4 healthcheck shipped).
+>
+> **Next coding milestone: not yet chosen** — pick from the post-M4 ideas once the
+> M6 soak looks clean.
 
 ## M0 — Repo bootstrap ✅
 
@@ -270,8 +271,9 @@ without config:
       `CalendarAgenda` in the bottom-left cell when rain is in the footer.
       `server.md` documents `CALENDAR_ICS_URL`/`CALENDAR_PROVIDER`/`CALENDAR_TTL`
       with a **placeholder** URL + secret-hygiene note. The URL is logged only as
-      a TTL, never echoed. **Remaining: deploy + on-device verify** (operator
-      adds the secret to the vault and redeploys).
+      a TTL, never echoed. **Deployed + verified on the panel (2026-06-14):** the
+      operator set the secret in the deployment env, redeployed the new image, and
+      confirmed the agenda renders from the live feed.
 
 > **Secret hygiene reminder:** the calendar URL/token + any calendar IDs are
 > secret/personal — env only, never committed, never in the image (it stays
