@@ -9,7 +9,7 @@
   h1 { margin: 0; font-size: 1.1rem; font-weight: 500; opacity: 0.7; }
   .row { display: flex; gap: 1rem; align-items: center; font-size: 0.9rem; flex-wrap: wrap; justify-content: center; }
   input[type=number] { width: 5rem; }
-  input[type=number], select, button { background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 0.25rem 0.5rem; border-radius: 4px; }
+  input[type=number], button { background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 0.25rem 0.5rem; border-radius: 4px; }
   button { padding: 0.4rem 0.8rem; cursor: pointer; }
   button:hover { background: #333; }
   .status { font-size: 0.8rem; opacity: 0.6; min-height: 1em; }
@@ -26,16 +26,6 @@
   <button id="now">refresh now</button>
   <label><input id="auto" type="checkbox" checked> auto</label>
 </div>
-<fieldset class="row">
-  <legend>layout</legend>
-  <label>orientation
-    <select id="orientation">
-      <option value="portrait">portrait (600×800)</option>
-      <option value="landscape">landscape (800×600)</option>
-    </select>
-  </label>
-  <label><input id="rainFooter" type="checkbox" checked> rain in footer</label>
-</fieldset>
 <fieldset class="row">
   <legend>optional device telemetry</legend>
   <label>batt <input id="batt" type="number" min="0" max="100" step="1" placeholder="0–100"></label>
@@ -54,15 +44,11 @@
   const autoCheckbox = document.getElementById('auto');
   const battInput = document.getElementById('batt');
   const plugCheckbox = document.getElementById('plug');
-  const orientationSelect = document.getElementById('orientation');
-  const rainFooterCheckbox = document.getElementById('rainFooter');
   let timer = null;
 
   function buildURL() {
     const params = new URLSearchParams();
     params.set('t', String(Date.now())); // cache-buster
-    if (orientationSelect.value === 'landscape') params.set('orientation', 'landscape');
-    params.set('rain', rainFooterCheckbox.checked ? 'footer' : 'card');
     if (battInput.value !== '') {
       params.set('batt', battInput.value);
       if (plugCheckbox.checked) params.set('plug', '1');
@@ -70,15 +56,7 @@
     return '/dashboard.png?' + params.toString();
   }
 
-  // Match the <img> box to the rendered PNG so the preview isn't squashed.
-  function applyOrientation() {
-    const landscape = orientationSelect.value === 'landscape';
-    img.width = landscape ? 800 : 600;
-    img.height = landscape ? 600 : 800;
-  }
-
   function refresh() {
-    applyOrientation();
     const url = buildURL();
     img.src = url;
     status.textContent = 'refreshed at ' + new Date().toLocaleTimeString();
@@ -97,8 +75,6 @@
   document.getElementById('now').addEventListener('click', refresh);
   battInput.addEventListener('change', refresh);
   plugCheckbox.addEventListener('change', refresh);
-  orientationSelect.addEventListener('change', refresh);
-  rainFooterCheckbox.addEventListener('change', refresh);
   document.getElementById('clear-telemetry').addEventListener('click', () => {
     battInput.value = '';
     plugCheckbox.checked = false;
