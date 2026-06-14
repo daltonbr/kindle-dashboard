@@ -257,10 +257,11 @@ without config:
       unit-tested (parse, recurrence incl. DST/short-month, override
       suppression, cache, adapter); golangci-lint clean, no new module.
 - [x] **M6.3 — `CalendarAgenda` widget.** ✅ 1×1 card listing the next N events
-      (default 4), each a title + relative when-label ("Today · 14:30",
-      "Tomorrow · all day", "Mon · 09:00", "22 Jun · …"), with title truncation,
-      an empty "Nothing scheduled" state, and dynamic row height that fits the
-      cell (mirrors the forecast card's label/rule/row idiom + `vscale`).
+      (default 3), each a title + relative when-label ("Today · 14:30",
+      "Tomorrow · all day", "Mon · 09:00", "22 Jun · …"), with two-line title
+      wrapping (M6.5), an empty "Nothing scheduled" state, and dynamic row height
+      that fits the cell (mirrors the forecast card's label/rule/row idiom +
+      `vscale`).
       Developed and eyeballed against `DemoCalendar`; unit-tested
       (day/when labels, truncation, footprint, ink, empty state).
 - [x] **M6.4 — Wire + place.** ✅ `buildCalendarProvider` in `main.go` selects
@@ -274,6 +275,14 @@ without config:
       a TTL, never echoed. **Deployed + verified on the panel (2026-06-14):** the
       operator set the secret in the deployment env, redeployed the new image, and
       confirmed the agenda renders from the live feed.
+- [x] **M6.5 — Two-line titles.** ✅ Long titles were truncated hard in the 1×1
+      cell (only ~244px wide at the 30px legibility floor). Rather than shrink
+      the font or widen the card, titles now wrap to **at most two lines** and
+      collapse back to one when they fit (`wrapToWidth`); the last line is
+      ellipsised only on genuine overflow. The card flows variable-height blocks
+      top-down and drops a trailing event rather than clipping it mid-row, so
+      2–3 events show comfortably. Default cap lowered 4 → 3. The empty
+      bottom-right cell stays free for a future widget (e.g. a rolling month).
 
 > **Secret hygiene reminder:** the calendar URL/token + any calendar IDs are
 > secret/personal — env only, never committed, never in the image (it stays

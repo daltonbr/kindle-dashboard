@@ -11,14 +11,18 @@ import (
 )
 
 // CalendarAgenda is the 1×1 "what's next" card: a short list of upcoming events,
-// one per row, each with a relative day/time label and its title. Past events
-// are filtered out relative to Now.
+// each with its title (wrapped to at most two lines) and a relative day/time
+// label. Past events are filtered out relative to Now.
 type CalendarAgenda struct {
 	M   data.CalendarModel
 	Now time.Time
-	// Max caps how many events to list (default 4 when zero).
+	// Max caps how many events to list (default 3 when zero). Titles wrap to
+	// two lines when needed, so fewer fit than the old single-line layout.
 	Max int
 }
+
+// maxTitleLines bounds how tall a single event's title may grow.
+const maxTitleLines = 2
 
 func (CalendarAgenda) Footprint() (cols, rows int) { return 1, 1 }
 
@@ -26,7 +30,7 @@ func (w CalendarAgenda) Render(dst *image.Gray, area image.Rectangle) {
 	const pad = 16
 	n := w.Max
 	if n == 0 {
-		n = 4
+		n = 3
 	}
 
 	s := vscale(area)
@@ -49,27 +53,80 @@ func (w CalendarAgenda) Render(dst *image.Gray, area image.Rectangle) {
 		return
 	}
 
-	// Divide the space below the header into n equal rows (by the cap, not the
-	// event count) so the list stays top-aligned and rows never overflow the
-	// cell — the bottom band the hardcoded height used to clip.
-	avail := area.Max.Y - top - int(6*s)
-	rowH := avail / n
+	// Flow events top-down with variable heights: a title wraps to one or two
+	// lines, then its when-label sits below. We always draw the first event;
+	// later ones are dropped once a block would overflow the cell, so the list
+	// never clips mid-row.
+	bottom := area.Max.Y - int(6*s)
 	titleFace := face(fs(30))
 	whenFace := face(fs(22))
+	titleLineH := int(33 * s)
 	maxTitleW := area.Dx() - 2*pad
 
+	y := top
 	for i, e := range events {
-		rowTop := top + i*rowH
+		lines := wrapToWidth(titleFace, e.Title, maxTitleW, maxTitleLines)
+		blockH := len(lines)*titleLineH + int(30*s) // title lines + when-label row
+		if i > 0 && y+blockH > bottom {
+			break
+		}
 
-		drawAt(dst, titleFace, truncateToWidth(titleFace, e.Title, maxTitleW),
-			area.Min.X+pad, rowTop+int(26*s), 0)
-		drawAt(dst, whenFace, whenLabel(now, e),
-			area.Min.X+pad, rowTop+int(50*s), 60)
+		base := y + int(24*s)
+		for _, ln := range lines {
+			drawAt(dst, titleFace, ln, area.Min.X+pad, base, 0)
+			base += titleLineH
+		}
+		drawAt(dst, whenFace, whenLabel(now, e), area.Min.X+pad, base+int(2*s), 60)
 
-		if i < len(events)-1 {
-			hLine(dst, area.Min.X+pad, area.Max.X-pad, rowTop+rowH-int(4*s), 220)
+		y += blockH
+		if i < len(events)-1 && y+int(8*s) < bottom {
+			hLine(dst, area.Min.X+pad, area.Max.X-pad, y, 220)
+			y += int(8 * s)
 		}
 	}
+}
+
+// wrapToWidth lays s out across at most maxLines lines, each fitting maxW pixels
+// in face. Returns a single line unchanged when it already fits. The final line
+// is ellipsised when the text still overflows; a lone word wider than maxW is
+// hard-truncated.
+func wrapToWidth(f font.Face, s string, maxW, maxLines int) []string {
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return []string{""}
+	}
+
+	var lines []string
+	cur := ""
+	for i := 0; i < len(words); {
+		try := words[i]
+		if cur != "" {
+			try = cur + " " + words[i]
+		}
+		if font.MeasureString(f, try).Round() <= maxW {
+			cur = try
+			i++
+			continue
+		}
+		if cur == "" { // single word too wide for an empty line
+			cur = truncateToWidth(f, words[i], maxW)
+			i++
+		}
+		lines = append(lines, cur)
+		cur = ""
+		if len(lines) == maxLines {
+			// No room left: fold the remainder into the last line as an
+			// ellipsised overflow hint.
+			if rest := strings.Join(words[i:], " "); rest != "" {
+				lines[maxLines-1] = truncateToWidth(f, lines[maxLines-1]+" "+rest, maxW)
+			}
+			return lines
+		}
+	}
+	if cur != "" {
+		lines = append(lines, cur)
+	}
+	return lines
 }
 
 // whenLabel renders an event's timing relative to now, e.g. "Today · 14:30",

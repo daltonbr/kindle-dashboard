@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"image"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,6 +61,37 @@ func TestTruncateToWidth(t *testing.T) {
 	}
 	if measure := font.MeasureString(f, got).Round(); measure > 120 {
 		t.Errorf("truncated string still %dpx wide, want <= 120", measure)
+	}
+}
+
+func TestWrapToWidth(t *testing.T) {
+	f := face(30)
+
+	// Fits on one line → returned unchanged, single line.
+	if got := wrapToWidth(f, "Gym", 1000, 2); len(got) != 1 || got[0] != "Gym" {
+		t.Errorf("short title = %q, want [\"Gym\"]", got)
+	}
+
+	// Long title wraps to two lines, each within budget, no clipping.
+	long := "Quarterly planning sync with the whole team"
+	lines := wrapToWidth(f, long, 200, 2)
+	if len(lines) == 0 || len(lines) > 2 {
+		t.Fatalf("got %d lines, want 1..2", len(lines))
+	}
+	for _, ln := range lines {
+		if w := font.MeasureString(f, ln).Round(); w > 200 {
+			t.Errorf("line %q is %dpx wide, want <= 200", ln, w)
+		}
+	}
+
+	// Text that overflows two lines gets an ellipsis on the last line.
+	veryLong := "This is an extraordinarily long event title that cannot possibly fit in two short lines"
+	got := wrapToWidth(f, veryLong, 160, 2)
+	if len(got) != 2 {
+		t.Fatalf("got %d lines, want exactly 2", len(got))
+	}
+	if !strings.HasSuffix(got[1], "…") {
+		t.Errorf("overflowing last line %q lacks ellipsis", got[1])
 	}
 }
 
