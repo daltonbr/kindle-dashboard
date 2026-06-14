@@ -2,6 +2,13 @@
 
 Milestones, roughly in order. Each one ends with a working, demonstrable thing — no half-states.
 
+> **Current focus (2026-06-14): close out M4.** M5 shipped; the next step is
+> finishing M4's loose ends — (1) deploy the D15 time-of-day cadence to the
+> device (`loop.sh`, built but not yet on the Kindle) and review `batt.csv` for
+> the "push to 15 min?" call (M4.3), and (2) decide + wire the M4.4 healthcheck.
+> Battery/mount (M4.6) and the first **private data source** (M5 follow-on —
+> Calendar/Home Assistant, needs a `gitleaks` guard) are queued after.
+
 ## M0 — Repo bootstrap ✅
 
 - [x] Local git repo
@@ -137,8 +144,15 @@ Daemon left running unattended at `INTERVAL=600`. When picking this back up, loo
 
 ### M4.4 — Healthcheck wiring (server-side)
 
-- [ ] If the operator's compose includes a `HEALTHCHECK`, ensure `GET /healthz` works from inside the container with no shell (currently fine — Go binary itself is the only thing in the image; HEALTHCHECK needs to use the binary or be docker's `CMD-SHELL` with `wget`/`curl` *inside* — neither exists in `FROM scratch`). Options: add a `/healthz` hint command in the binary itself (`./server healthcheck`), or accept that the host-side healthcheck is the only viable place.
-- [ ] Document the choice.
+The image is `FROM scratch` — no shell, no `wget`/`curl` — so a Docker
+`HEALTHCHECK` can't use `CMD-SHELL`. **Plan (chosen):** give the binary a
+`healthcheck` subcommand (`./server healthcheck`) that does a localhost `GET
+/healthz` against `$PORT` and exits 0/1, so compose can use
+`HEALTHCHECK CMD ["/server", "healthcheck"]`. Self-contained, needs no extra
+files in the image.
+
+- [ ] Add the `healthcheck` subcommand to `main.go` (dial `127.0.0.1:$PORT/healthz`, short timeout, exit code = result). Unit-test the exit logic.
+- [ ] Add a `HEALTHCHECK` line to the Dockerfile and document the compose snippet in `server.md` (Deploy recipes already reference a healthcheck — align it).
 
 ### M4.5 — Daemon survival across reboots ✅
 
