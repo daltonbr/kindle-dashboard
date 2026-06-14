@@ -8,10 +8,11 @@ Milestones, roughly in order. Each one ends with a working, demonstrable thing �
 > battery/mount** (hardware-led: power delivery at the mount + a clean
 > drain-slope read; the device runs mostly on battery and has hit 4%).
 >
-> **Next coding milestone: M6 — Calendar (first private source).** M6.0–M6.2 are
+> **Next coding milestone: M6 — Calendar (first private source).** M6.0–M6.3 are
 > done (gitleaks guard; secret iCal URL + data model; stdlib ICS fetch/parse with
-> bounded RRULE). Next is **M6.3 — the `CalendarAgenda` widget** (built against
-> `DemoCalendar`). See the M6 section below.
+> bounded RRULE; `CalendarAgenda` widget). Last step is **M6.4 — wire via
+> `CALENDAR_ICS_URL` + place in the bottom-left cell + deploy**. See the M6
+> section below.
 
 ## M0 — Repo bootstrap ✅
 
@@ -254,9 +255,13 @@ without config:
       windower. `data.ICSCalendar` adapts it onto the provider seam. Thoroughly
       unit-tested (parse, recurrence incl. DST/short-month, override
       suppression, cache, adapter); golangci-lint clean, no new module.
-- [ ] **M6.3 — `CalendarAgenda` widget.** Draw the next N events into a 1×1 cell,
-      reusing the widget drawing helpers; respect the ~20px legibility floor.
-      Develop against `DemoCalendar` first.
+- [x] **M6.3 — `CalendarAgenda` widget.** ✅ 1×1 card listing the next N events
+      (default 4), each a title + relative when-label ("Today · 14:30",
+      "Tomorrow · all day", "Mon · 09:00", "22 Jun · …"), with title truncation,
+      an empty "Nothing scheduled" state, and dynamic row height that fits the
+      cell (mirrors the forecast card's label/rule/row idiom + `vscale`).
+      Developed and eyeballed against `DemoCalendar`; unit-tested
+      (day/when labels, truncation, footprint, ink, empty state).
 - [ ] **M6.4 — Wire + place.** Provider selected via `CALENDAR_ICS_URL` env
       (inert/omitted when unset — clone-safe); place the widget in the empty
       bottom-left cell in `dashboard.go`. Document the env var with a

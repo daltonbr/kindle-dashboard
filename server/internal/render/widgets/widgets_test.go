@@ -17,6 +17,7 @@ func TestFootprints(t *testing.T) {
 		{"today", WeatherToday{}, 1, 1},
 		{"forecast", WeatherForecast{}, 1, 1},
 		{"rain", Rain{}, 2, 1},
+		{"agenda", CalendarAgenda{}, 1, 1},
 	}
 	for _, c := range cases {
 		if cols, rows := c.w.Footprint(); cols != c.cols || rows != c.rows {
@@ -29,11 +30,14 @@ func TestFootprints(t *testing.T) {
 // across a card-sized rect and a short footer-strip rect (the rain widget is
 // used both ways).
 func TestWidgets_renderInk(t *testing.T) {
-	m := data.DemoModel(time.Date(2026, 6, 14, 9, 0, 0, 0, time.UTC))
+	ref := time.Date(2026, 6, 14, 9, 0, 0, 0, time.UTC)
+	m := data.DemoModel(ref)
+	cal := data.DemoCalendarModel(ref)
 	widgets := map[string]Widget{
 		"today":    WeatherToday{M: m},
 		"forecast": WeatherForecast{M: m},
 		"rain":     Rain{Hours: m.Hourly},
+		"agenda":   CalendarAgenda{M: cal, Now: ref},
 	}
 	areas := map[string]image.Rectangle{
 		"card":  image.Rect(20, 20, 296, 320),
