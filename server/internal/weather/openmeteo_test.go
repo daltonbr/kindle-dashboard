@@ -35,8 +35,8 @@ func TestFetch_DecodesBrightonFixture(t *testing.T) {
 		"latitude=50.8225",
 		"longitude=-0.1372",
 		"current=temperature_2m%2Cweather_code",
-		"daily=temperature_2m_max%2Ctemperature_2m_min",
-		"hourly=temperature_2m",
+		"daily=temperature_2m_max%2Ctemperature_2m_min%2Cweather_code%2Cprecipitation_probability_max",
+		"hourly=temperature_2m%2Cprecipitation_probability%2Cprecipitation",
 		"timezone=auto",
 		"forecast_days=3",
 	} {
@@ -58,19 +58,42 @@ func TestFetch_DecodesBrightonFixture(t *testing.T) {
 	if !fc.Now.Time.Equal(wantNow) {
 		t.Errorf("Now.Time = %v, want %v", fc.Now.Time, wantNow)
 	}
-	if fc.HighToday != 30.3 {
-		t.Errorf("HighToday = %v, want 30.3", fc.HighToday)
+	// Daily block: three days, today (index 0) carries hi/lo, weather code and
+	// peak precip probability.
+	if got := len(fc.Days); got != 3 {
+		t.Fatalf("len(Days) = %d, want 3", got)
 	}
-	if fc.LowToday != 18.5 {
-		t.Errorf("LowToday = %v, want 18.5", fc.LowToday)
+	today := fc.Days[0]
+	if !today.Date.Equal(time.Date(2026, 5, 25, 0, 0, 0, 0, bst)) {
+		t.Errorf("Days[0].Date = %v, want 2026-05-25 local", today.Date)
 	}
+	if today.HighC != 30.3 {
+		t.Errorf("Days[0].HighC = %v, want 30.3", today.HighC)
+	}
+	if today.LowC != 18.5 {
+		t.Errorf("Days[0].LowC = %v, want 18.5", today.LowC)
+	}
+	if today.WeatherCode != 61 {
+		t.Errorf("Days[0].WeatherCode = %v, want 61", today.WeatherCode)
+	}
+	if today.PrecipChance != 80 {
+		t.Errorf("Days[0].PrecipChance = %v, want 80", today.PrecipChance)
+	}
+
 	if got := len(fc.Next24h); got != 24 {
 		t.Fatalf("len(Next24h) = %d, want 24", got)
 	}
-	// Current is at 16:15; first hourly entry at or after that is 17:00 local.
+	// Current is at 16:15; first hourly entry at or after that is 17:00 local,
+	// which is hourly index 17 in the fixture (precip prob = 17, precip = 0.7mm).
 	wantFirst := time.Date(2026, 5, 25, 17, 0, 0, 0, bst)
 	if !fc.Next24h[0].Time.Equal(wantFirst) {
 		t.Errorf("Next24h[0].Time = %v, want %v", fc.Next24h[0].Time, wantFirst)
+	}
+	if fc.Next24h[0].PrecipChance != 17 {
+		t.Errorf("Next24h[0].PrecipChance = %v, want 17", fc.Next24h[0].PrecipChance)
+	}
+	if fc.Next24h[0].PrecipMM != 0.7 {
+		t.Errorf("Next24h[0].PrecipMM = %v, want 0.7", fc.Next24h[0].PrecipMM)
 	}
 	// And the 24th entry should be 23h after that.
 	wantLast := wantFirst.Add(23 * time.Hour)

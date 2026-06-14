@@ -13,9 +13,8 @@ type forecaster interface {
 }
 
 // OpenMeteo adapts the existing internal/weather client+cache to the
-// WeatherProvider seam. It maps the fields the M3 client already fetches;
-// precipitation and the full multi-day outlook are zero/today-only until the
-// client is extended (roadmap M5.3).
+// WeatherProvider seam, projecting the client's forecast (hourly precipitation
+// plus a 3-day daily outlook) onto the render model.
 type OpenMeteo struct {
 	src forecaster
 }
@@ -34,17 +33,28 @@ func (o *OpenMeteo) Weather(ctx context.Context) (WeatherModel, error) {
 
 	hourly := make([]HourPoint, len(fc.Next24h))
 	for i, h := range fc.Next24h {
-		// TODO(M5.3): carry precipitation_probability + precipitation once the
-		// Open-Meteo client requests them.
-		hourly[i] = HourPoint{Time: h.Time, TempC: h.TempC}
+		hourly[i] = HourPoint{
+			Time:         h.Time,
+			TempC:        h.TempC,
+			PrecipChance: h.PrecipChance,
+			PrecipMM:     h.PrecipMM,
+		}
+	}
+
+	days := make([]DayOutlook, len(fc.Days))
+	for i, d := range fc.Days {
+		days[i] = DayOutlook{
+			Date:         d.Date,
+			HighC:        d.HighC,
+			LowC:         d.LowC,
+			Code:         d.WeatherCode,
+			PrecipChance: d.PrecipChance,
+		}
 	}
 
 	return WeatherModel{
-		Now: Conditions{TempC: fc.Now.TempC, Code: fc.Now.WeatherCode},
-		Days: []DayOutlook{
-			// TODO(M5.3): the client only keeps day[0]; widen to 3 days + precip.
-			{Date: fc.Now.Time, HighC: fc.HighToday, LowC: fc.LowToday, Code: fc.Now.WeatherCode},
-		},
+		Now:        Conditions{TempC: fc.Now.TempC, Code: fc.Now.WeatherCode},
+		Days:       days,
 		Hourly:     hourly,
 		ObservedAt: fc.Now.Time,
 		FetchedAt:  fc.FetchedAt,

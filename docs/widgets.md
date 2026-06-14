@@ -1,7 +1,8 @@
 # Widget architecture (M5) — design + plan
 
 Status: **building (2026-06-14).** Core seam shipped — three weather cards on a
-filling 2×2 grid, demo data layer, both rain placements. The build is a
+filling 2×2 grid, both rain placements, and the live Open-Meteo provider (M5.3,
+hourly precip + 3-day daily) wired as the default. The build is a
 deliberate **redesign**, not the byte-for-byte port this doc originally sketched;
 see [D17](decisions.md#d17--m5-widget-build-redesign-over-byte-for-byte-port-three-weather-cards-on-a-filling-22)
 for what changed and the [step checklist](#next-steps-m5-checklist) for current
@@ -143,11 +144,11 @@ Sequenced so each step ends with something runnable, and the two halves
 - [x] **M5.2 — Data layer + demo provider.** `internal/data` defines
       `WeatherModel` + `WeatherProvider`; `DemoWeather` is hardcoded and is the
       default provider during M5. Widgets render with zero network.
-- [~] **M5.3 — Real weather provider behind the seam.** `data.OpenMeteo` adapter
-      wraps the existing client+cache (`WEATHER_PROVIDER=openmeteo`). **TODO:** it
-      maps only the M3 fields — widen the Open-Meteo client to fetch precip
-      probability/amount + a 3-day daily block, then make it the default.
-      `OpenWeatherMap` (env key) still optional.
+- [x] **M5.3 — Real weather provider behind the seam.** `data.OpenMeteo` adapter
+      wraps the client+cache (`WEATHER_PROVIDER=openmeteo`, now the default). The
+      Open-Meteo client fetches hourly precip probability/amount + a 3-day daily
+      block (hi/lo, weather code, peak precip probability), so the rain card and
+      3-day forecast render live data. `OpenWeatherMap` (env key) still optional.
 - [x] **M5.4 — Composition proven.** Three widgets across the grid:
       `WeatherToday` (1×1), `WeatherForecast` (1×1), `Rain` (2×1). The `Rain`
       renderer is rect-agnostic — also rendable in the footer via `?rain=footer`.

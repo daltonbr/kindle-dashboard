@@ -44,17 +44,17 @@ M3 will add `internal/weather/` (Open-Meteo client + TTL cache) and embedded TTF
 | --- | --- | --- |
 | `PORT` | `8080` | Listening port inside the container. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. Standard `slog.Level` text. |
-| `WEATHER_PROVIDER` | `demo` | `demo` (network-free fixture, the M5 development default) or `openmeteo` (live Open-Meteo client+cache). |
+| `WEATHER_PROVIDER` | `openmeteo` | `openmeteo` (live Open-Meteo client+cache, the default) or `demo` (network-free fixture, for widget development and offline runs). |
 | `WEATHER_LAT` | `50.8225` | Latitude for the Open-Meteo lookup. Default is Brighton, UK. *(only used when `WEATHER_PROVIDER=openmeteo`)* |
 | `WEATHER_LON` | `-0.1372` | Longitude for the Open-Meteo lookup. *(openmeteo only)* |
 | `WEATHER_TTL` | `10m` | Any `time.Duration`. The upstream cache TTL; `0` disables caching. *(openmeteo only)* |
 
-> **M5 note:** the server currently defaults to `WEATHER_PROVIDER=demo` so the
-> widget layout can be developed against hardcoded data. Set
-> `WEATHER_PROVIDER=openmeteo` for live weather — but note the adapter still maps
-> only the M3 fields (no precip, today-only outlook) until the Open-Meteo client
-> is widened (roadmap M5.3). Switch the deployment default back to `openmeteo`
-> once that lands.
+> **M5 note:** the server defaults to `WEATHER_PROVIDER=openmeteo`. The
+> Open-Meteo client fetches hourly precipitation (probability + amount) and a
+> 3-day daily outlook (hi/lo, weather code, peak precip probability), so the rain
+> card and 3-day forecast render live data (roadmap M5.3). Set
+> `WEATHER_PROVIDER=demo` to develop the widget layout against the network-free
+> fixture.
 
 > **Operator TODO:** expose `WEATHER_LAT` / `WEATHER_LON` / `WEATHER_TTL` as variables in the deployment config so they can be tuned without rebuilding the image. Currently relying on the image's built-in Brighton defaults.
 

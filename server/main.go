@@ -72,11 +72,11 @@ func main() {
 	_ = srv.Shutdown(shutdownCtx)
 }
 
-// buildWeatherProvider selects the weather data source. Defaults to the
-// network-free demo fixture during M5 widget development; set
-// WEATHER_PROVIDER=openmeteo to use the live Open-Meteo client+cache.
+// buildWeatherProvider selects the weather data source. Defaults to the live
+// Open-Meteo client+cache; set WEATHER_PROVIDER=demo for the network-free
+// fixture (useful for widget development and offline runs).
 func buildWeatherProvider() (data.WeatherProvider, error) {
-	switch strings.ToLower(envOrDefault("WEATHER_PROVIDER", "demo")) {
+	switch strings.ToLower(envOrDefault("WEATHER_PROVIDER", "openmeteo")) {
 	case "openmeteo":
 		cache, err := buildWeatherCache()
 		if err != nil {

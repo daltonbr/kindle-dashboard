@@ -6,7 +6,6 @@ package weather
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,8 +19,7 @@ const defaultBaseURL = "https://api.open-meteo.com"
 // Forecast is the subset of the Open-Meteo response we actually render.
 type Forecast struct {
 	Now       CurrentReading
-	HighToday float64
-	LowToday  float64
+	Days      []DailyReading // chronological daily outlook; index 0 is today
 	Next24h   []HourlyReading
 	FetchedAt time.Time
 }
@@ -33,10 +31,20 @@ type CurrentReading struct {
 	WeatherCode int
 }
 
-// HourlyReading is one entry on the hourly temperature curve.
+// DailyReading summarises a single forecast day.
+type DailyReading struct {
+	Date         time.Time
+	HighC, LowC  float64
+	WeatherCode  int
+	PrecipChance int // peak probability of precipitation over the day, 0–100%
+}
+
+// HourlyReading is one entry on the hourly curve.
 type HourlyReading struct {
-	Time  time.Time
-	TempC float64
+	Time         time.Time
+	TempC        float64
+	PrecipChance int     // probability of precipitation, 0–100%
+	PrecipMM     float64 // expected precipitation amount, millimetres
 }
 
 // Client fetches forecasts from Open-Meteo.
@@ -90,8 +98,8 @@ func (c *Client) buildURL(lat, lon float64) string {
 	q.Set("latitude", strconv.FormatFloat(lat, 'f', -1, 64))
 	q.Set("longitude", strconv.FormatFloat(lon, 'f', -1, 64))
 	q.Set("current", "temperature_2m,weather_code")
-	q.Set("daily", "temperature_2m_max,temperature_2m_min")
-	q.Set("hourly", "temperature_2m")
+	q.Set("daily", "temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max")
+	q.Set("hourly", "temperature_2m,precipitation_probability,precipitation")
 	q.Set("timezone", "auto")
 	q.Set("forecast_days", "3")
 	return c.baseURL + "/v1/forecast?" + q.Encode()
@@ -110,17 +118,24 @@ type openMeteoResponse struct {
 		WeatherCode int     `json:"weather_code"`
 	} `json:"current"`
 	Daily struct {
-		Time []string  `json:"time"`
-		Max  []float64 `json:"temperature_2m_max"`
-		Min  []float64 `json:"temperature_2m_min"`
+		Time          []string  `json:"time"`
+		Max           []float64 `json:"temperature_2m_max"`
+		Min           []float64 `json:"temperature_2m_min"`
+		WeatherCode   []int     `json:"weather_code"`
+		PrecipProbMax []int     `json:"precipitation_probability_max"`
 	} `json:"daily"`
 	Hourly struct {
-		Time        []string  `json:"time"`
-		Temperature []float64 `json:"temperature_2m"`
+		Time          []string  `json:"time"`
+		Temperature   []float64 `json:"temperature_2m"`
+		PrecipChance  []int     `json:"precipitation_probability"`
+		Precipitation []float64 `json:"precipitation"`
 	} `json:"hourly"`
 }
 
-const apiTimeLayout = "2006-01-02T15:04"
+const (
+	apiTimeLayout = "2006-01-02T15:04"
+	apiDateLayout = "2006-01-02"
+)
 
 func (r openMeteoResponse) toForecast() (Forecast, error) {
 	loc := time.FixedZone("api", r.UTCOffsetSeconds)
@@ -130,16 +145,17 @@ func (r openMeteoResponse) toForecast() (Forecast, error) {
 		return Forecast{}, fmt.Errorf("parse current.time %q: %w", r.Current.Time, err)
 	}
 
-	if len(r.Daily.Max) == 0 || len(r.Daily.Min) == 0 {
-		return Forecast{}, errors.New("open-meteo: empty daily section")
-	}
-
 	if len(r.Hourly.Time) != len(r.Hourly.Temperature) {
 		return Forecast{}, fmt.Errorf("open-meteo: hourly time/temperature length mismatch (%d vs %d)",
 			len(r.Hourly.Time), len(r.Hourly.Temperature))
 	}
 
-	hourly, err := buildHourly(r.Hourly.Time, r.Hourly.Temperature, loc)
+	hourly, err := buildHourly(r.Hourly.Time, r.Hourly.Temperature, r.Hourly.PrecipChance, r.Hourly.Precipitation, loc)
+	if err != nil {
+		return Forecast{}, err
+	}
+
+	days, err := buildDaily(r.Daily.Time, r.Daily.Max, r.Daily.Min, r.Daily.WeatherCode, r.Daily.PrecipProbMax, loc)
 	if err != nil {
 		return Forecast{}, err
 	}
@@ -152,21 +168,54 @@ func (r openMeteoResponse) toForecast() (Forecast, error) {
 			TempC:       r.Current.Temperature,
 			WeatherCode: r.Current.WeatherCode,
 		},
-		HighToday: r.Daily.Max[0],
-		LowToday:  r.Daily.Min[0],
+		Days:      days,
 		Next24h:   next24,
 		FetchedAt: time.Now().UTC(),
 	}, nil
 }
 
-func buildHourly(times []string, temps []float64, loc *time.Location) ([]HourlyReading, error) {
+func buildHourly(times []string, temps []float64, probs []int, mm []float64, loc *time.Location) ([]HourlyReading, error) {
 	out := make([]HourlyReading, 0, len(times))
 	for i, ts := range times {
 		t, err := time.ParseInLocation(apiTimeLayout, ts, loc)
 		if err != nil {
 			return nil, fmt.Errorf("parse hourly time %q: %w", ts, err)
 		}
-		out = append(out, HourlyReading{Time: t, TempC: temps[i]})
+		hr := HourlyReading{Time: t, TempC: temps[i]}
+		if i < len(probs) {
+			hr.PrecipChance = probs[i]
+		}
+		if i < len(mm) {
+			hr.PrecipMM = mm[i]
+		}
+		out = append(out, hr)
+	}
+	return out, nil
+}
+
+// buildDaily maps the daily arrays into chronological DailyReadings. Max/Min are
+// required; weather code and precip probability are filled when present (they
+// align index-for-index with the date series).
+func buildDaily(times []string, max, min []float64, codes, precipProb []int, loc *time.Location) ([]DailyReading, error) {
+	n := len(times)
+	if n == 0 || len(max) < n || len(min) < n {
+		return nil, fmt.Errorf("open-meteo: empty or short daily section (time=%d max=%d min=%d)",
+			n, len(max), len(min))
+	}
+	out := make([]DailyReading, 0, n)
+	for i := range n {
+		d, err := time.ParseInLocation(apiDateLayout, times[i], loc)
+		if err != nil {
+			return nil, fmt.Errorf("parse daily date %q: %w", times[i], err)
+		}
+		dr := DailyReading{Date: d, HighC: max[i], LowC: min[i]}
+		if i < len(codes) {
+			dr.WeatherCode = codes[i]
+		}
+		if i < len(precipProb) {
+			dr.PrecipChance = precipProb[i]
+		}
+		out = append(out, dr)
 	}
 	return out, nil
 }

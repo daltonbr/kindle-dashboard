@@ -39,9 +39,8 @@ func (f *fakeFetcher) Fetch(ctx context.Context, _ float64, _ float64) (Forecast
 
 func sampleForecast(temp float64) Forecast {
 	return Forecast{
-		Now:       CurrentReading{TempC: temp},
-		HighToday: temp + 2,
-		LowToday:  temp - 2,
+		Now:  CurrentReading{TempC: temp},
+		Days: []DailyReading{{HighC: temp + 2, LowC: temp - 2}},
 	}
 }
 

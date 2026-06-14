@@ -173,11 +173,12 @@ filling 2×2 grid, developed against demo data first.
 - [x] **M5.2** — Data layer + `DemoWeather`. `internal/data` defines
       `WeatherModel`/`WeatherProvider` (incl. precip fields) + `DemoWeather`;
       widgets render with zero network. Demo is the default provider during M5.
-- [~] **M5.3** — Real weather provider behind the seam. `data.OpenMeteo` adapter
-      exists (`WEATHER_PROVIDER=openmeteo`) but maps only the M3 fields; **TODO:**
-      widen the Open-Meteo client to fetch `precipitation_probability` +
-      `precipitation` and a 3-day daily block, then make it the default.
-      OpenWeatherMap (env key path) still optional.
+- [x] **M5.3** — Real weather provider behind the seam. The Open-Meteo client now
+      fetches `precipitation_probability` + `precipitation` (hourly) and a 3-day
+      daily block (max/min/weather code/peak precip probability); `data.OpenMeteo`
+      maps the full `Hourly` + 3 `Days` onto `WeatherModel`, and `openmeteo` is
+      the default provider (`demo` still available). OpenWeatherMap (env key path)
+      still optional.
 - [x] **M5.4** — Composition exercised with three widgets: `WeatherToday` (1×1),
       `WeatherForecast` (1×1), `Rain` (2×1, rect-agnostic — also rendable in the
       footer via `?rain=footer`). A distinct non-weather widget (clock/date) is
