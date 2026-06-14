@@ -56,3 +56,52 @@ func DemoModel(ref time.Time) WeatherModel {
 		FetchedAt:  ref,
 	}
 }
+
+// DemoCalendar is a CalendarProvider that returns hardcoded, network-free
+// events. It is the fixture the calendar widget is developed and tested against,
+// and the fallback when no real provider is configured (decision D16).
+type DemoCalendar struct{}
+
+// Calendar returns a demo agenda anchored to the current wall clock so the
+// upcoming events line up with "now".
+func (DemoCalendar) Calendar(_ context.Context) (CalendarModel, error) {
+	return DemoCalendarModel(time.Now()), nil
+}
+
+// DemoCalendarModel builds a deterministic agenda anchored to ref. Exposed (like
+// DemoModel) so tests and previews can pin the reference time and get stable
+// output. The fixture deliberately mixes timed and all-day events across today
+// and the next few days, plus one already-ended event so Upcoming has something
+// to filter.
+func DemoCalendarModel(ref time.Time) CalendarModel {
+	day := ref.Truncate(24 * time.Hour)
+	atToday := func(h, m int) time.Time {
+		return time.Date(ref.Year(), ref.Month(), ref.Day(), h, m, 0, 0, ref.Location())
+	}
+
+	events := []Event{
+		// Already over by mid-morning — exercises the Upcoming filter.
+		{Title: "Morning standup", Start: atToday(9, 0), End: atToday(9, 15)},
+		{Title: "Dentist", Start: atToday(14, 30), End: atToday(15, 30)},
+		{Title: "Pick up groceries", Start: atToday(18, 0), End: atToday(18, 45)},
+		{
+			Title:  "Bin day",
+			Start:  day.Add(24 * time.Hour),
+			End:    day.Add(48 * time.Hour),
+			AllDay: true,
+		},
+		{
+			Title: "Lunch with Sam",
+			Start: day.Add(24*time.Hour + 12*time.Hour),
+			End:   day.Add(24*time.Hour + 13*time.Hour),
+		},
+		{
+			Title:  "Weekend trip",
+			Start:  day.Add(72 * time.Hour),
+			End:    day.Add(120 * time.Hour),
+			AllDay: true,
+		},
+	}
+
+	return CalendarModel{Events: events, FetchedAt: ref}
+}

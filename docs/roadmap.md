@@ -8,9 +8,9 @@ Milestones, roughly in order. Each one ends with a working, demonstrable thing �
 > battery/mount** (hardware-led: power delivery at the mount + a clean
 > drain-slope read; the device runs mostly on battery and has hit 4%).
 >
-> **Next coding milestone: M6 — Calendar (first private source).** M6.0 (the
-> `gitleaks` CI guard) is done; next is **M6.1 — auth approach + data model**
-> (leaning toward a Google Calendar secret iCal URL). See the M6 section below.
+> **Next coding milestone: M6 — Calendar (first private source).** M6.0
+> (`gitleaks` guard) and M6.1 (secret iCal URL + data model) are done; next is
+> **M6.2 — ICS fetch + parse** (TTL-cached). See the M6 section below.
 
 ## M0 — Repo bootstrap ✅
 
@@ -237,11 +237,12 @@ without config:
       [server.md → Secret hygiene](server.md#secret-hygiene--config-public-repo).
       Tool choice recorded in [D18](decisions.md#d18--secret-scan-ci-guard-gitleaks).
       Verified clean locally (`gitleaks git`, 48 commits, no leaks).
-- [ ] **M6.1 — Auth approach + data model.** Decide how to read the calendar.
-      **Leaning:** a Google Calendar **secret iCal URL** (single secret env var,
-      read-only, no OAuth dance) over CalDAV/OAuth — record as a `decisions.md`
-      entry. Define `data.CalendarModel` (events: title, start, end, all-day) +
-      `CalendarProvider` interface + `DemoCalendar` (hardcoded fixture).
+- [x] **M6.1 — Auth approach + data model.** ✅ Chose the Google Calendar
+      **secret iCal URL** (`CALENDAR_ICS_URL`, read-only, no OAuth) — see
+      [D19](decisions.md#d19--calendar-auth-google-calendar-secret-ical-url).
+      `data.CalendarModel` (events: title/start/end/all-day) + `Upcoming(from,n)`
+      helper, `CalendarProvider` interface, and `DemoCalendar` fixture landed in
+      `internal/data/` with tests.
 - [ ] **M6.2 — ICS fetch + parse.** Fetch the feed (TTL-cached like weather) and
       parse VEVENTs. **Key decision:** minimal stdlib VEVENT parser vs a small
       dep (e.g. an ical library) — recurrence (RRULE) + timezones are the

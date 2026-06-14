@@ -446,3 +446,51 @@ first private source (M6 — Calendar).
   bespoke `CALENDAR_ICS_URL` carrying a private token.
 - **trufflehog.** Comparable; gitleaks' single static binary + TOML config and
   the drop-in Action made it the lower-friction choice for a solo repo.
+
+---
+
+## D19 — Calendar auth: Google Calendar secret iCal URL
+
+**Decision (M6.1):** The calendar provider reads a **Google Calendar private
+iCal (ICS) feed** via its "Secret address in iCal format" URL, supplied as a
+single secret env var `CALENDAR_ICS_URL`. Read-only HTTP GET of an `.ics` feed;
+no OAuth, no token refresh, no Google API client. The provider is inert when the
+var is unset (falls back to `DemoCalendar` / renders "unavailable", per D16).
+
+**Why:**
+
+- **One secret, no dance.** The secret iCal URL is a self-contained bearer
+  credential — one `GET` returns the whole agenda. No OAuth client
+  secret + refresh-token lifecycle, no consent screen, no API quotas to manage.
+  For a read-only wall display that is exactly the right amount of machinery.
+- **Matches the inert-without-config rule cleanly.** Unset var → no provider.
+  The whole secret is a single string that lives only in the deployment env
+  (homelab Ansible vault → `--env-file` at `docker run`), never in git or the
+  `FROM scratch` image. Nothing personal leaks into the public repo.
+- **Standard format.** It's a plain RFC 5545 ICS feed, so the parser (M6.2)
+  isn't Google-specific — swapping to any other ICS source (Fastmail, a CalDAV
+  server's export, an Outlook published calendar) is just a different URL.
+
+**Trade-offs accepted:**
+
+- **The URL *is* the secret.** Anyone with it can read the calendar until it's
+  rotated. Treated as a credential: vault-stored, env-injected, gitleaks-guarded
+  (D18). Rotation = "Reset" the secret address in Google Calendar settings.
+- **Read-only + polling latency.** No write-back (we don't need it) and updates
+  only appear at the next TTL refresh (M6.2). Fine for an agenda.
+- **No fine-grained scope/revocation** like OAuth — the only control is
+  reset-the-URL. Acceptable for a single low-sensitivity feed.
+
+**Rejected alternatives:**
+
+- **CalDAV (user + app password).** Two secrets, more protocol surface, supports
+  writes we don't need.
+- **Google Calendar API + OAuth.** Most secret material and moving parts (client
+  secret + refresh token, token refresh code, API enablement). Overkill for a
+  read-only agenda.
+
+**Where to get the URL (operator note):** Google Calendar → *Settings* → pick the
+calendar under *Settings for my calendars* → *Integrate calendar* → **"Secret
+address in iCal format"**. Store it in the Ansible vault; deploy as
+`CALENDAR_ICS_URL`. Never paste the real value into the repo or these docs —
+`server.md` carries a placeholder only.
