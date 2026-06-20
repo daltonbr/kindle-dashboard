@@ -45,6 +45,7 @@ M3 will add `internal/weather/` (Open-Meteo client + TTL cache) and embedded TTF
 | `PORT` | `8080` | Listening port inside the container. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. Standard `slog.Level` text. |
 | `DASHBOARD_ORIENTATION` | `portrait` | Default page orientation: `portrait` (600×800) or `landscape` (800×600). Server-side so the device fetches a bare `/dashboard.png`; `?orientation=` overrides per-request (used by `/preview`). |
+| `DASHBOARD_TIMEZONE` | `Europe/London` | IANA zone used to render all clock values (agenda event times, header date, "updated HH:MM", month grid). Must be the wall's real local zone — the `FROM scratch` image has `time.Local == UTC`, so without this every time renders in GMT (an hour behind during BST). An IANA name (not a fixed offset) means BST↔GMT is handled automatically. Default matches the Brighton weather coordinates. |
 | `WEATHER_PROVIDER` | `openmeteo` | `openmeteo` (live Open-Meteo client+cache, the default) or `demo` (network-free fixture, for widget development and offline runs). |
 | `WEATHER_LAT` | `50.8225` | Latitude for the Open-Meteo lookup. Default is Brighton, UK. *(only used when `WEATHER_PROVIDER=openmeteo`)* |
 | `WEATHER_LON` | `-0.1372` | Longitude for the Open-Meteo lookup. *(openmeteo only)* |

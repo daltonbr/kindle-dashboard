@@ -58,8 +58,14 @@ func main() {
 	defaultOrientation := orientationFromName(orientationName)
 	slog.Info("default orientation", "value", orientationName)
 
+	loc, err := buildLocation()
+	if err != nil {
+		slog.Error("timezone config", "err", err)
+		os.Exit(1)
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(provider, calProvider, defaultOrientation))
+	mux.HandleFunc("GET /dashboard.png", makeDashboardHandler(provider, calProvider, defaultOrientation, loc))
 	mux.HandleFunc("GET /healthz", handleHealth)
 	mux.HandleFunc("GET /preview", handlePreview)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +161,26 @@ func buildWeatherCache() (*weather.Cache, error) {
 	return weather.NewCache(weather.NewClient("", nil), lat, lon, ttl), nil
 }
 
-func makeDashboardHandler(provider data.WeatherProvider, calProvider data.CalendarProvider, defaultOrientation render.Orientation) http.HandlerFunc {
+// buildLocation resolves the display time zone used to stamp render times.
+// Everything time-of-day on the panel — agenda event times, the header date,
+// the "updated HH:MM" line, the month grid — is rendered in this location, so
+// it must be the wall's real local zone, not the container's. The production
+// image is FROM scratch with time.Local == UTC, which would otherwise render
+// every clock in GMT (an hour behind during BST). Defaults to Europe/London to
+// match the hard-coded Brighton weather coordinates; using an IANA zone (not a
+// fixed offset) means the BST↔GMT switch is handled automatically. Resolves
+// against the embedded zoneinfo (time/tzdata, imported by the calendar pkg).
+func buildLocation() (*time.Location, error) {
+	name := envOrDefault("DASHBOARD_TIMEZONE", "Europe/London")
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, errors.New("DASHBOARD_TIMEZONE: " + err.Error())
+	}
+	slog.Info("display timezone", "value", name)
+	return loc, nil
+}
+
+func makeDashboardHandler(provider data.WeatherProvider, calProvider data.CalendarProvider, defaultOrientation render.Orientation, loc *time.Location) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fetchCtx, cancel := context.WithTimeout(r.Context(), weatherFetchTimeout)
 		defer cancel()
@@ -182,7 +207,7 @@ func makeDashboardHandler(provider data.WeatherProvider, calProvider data.Calend
 		q := r.URL.Query()
 		opts := render.Options{
 			Orientation:  parseOrientation(q, defaultOrientation),
-			Now:          time.Now(),
+			Now:          time.Now().In(loc),
 			Battery:      parseBattery(q),
 			RainInFooter: parseRainInFooter(q),
 			Calendar:     calModel,
